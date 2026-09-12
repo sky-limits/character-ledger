@@ -1,4 +1,4 @@
-/* OWNER-EDITED SITE DATA — v0.08
+/* OWNER-EDITED SITE DATA — v0.09
    Edit this file in GitHub or a text editor, then commit it to the repository.
    This is the only source of character records. Visitors cannot submit edits.
    See README.txt for copy/paste examples for characters, artwork, and rewards.
@@ -239,6 +239,21 @@ window.CHARACTER_LEDGER_SEED = {
     itemRewards: '', rewardsRedeemed: false, redemptionLink: '',
     credit: 'sky-limits', source: '', date: '', notes: '3 (Fullbody Colored + Shaded) +2 (Background) +2 (Monthly Quest)'
   }
+  ],
+  // Calculator rules are owner-editable. Presets may target one species or
+  // use systemId: '' to appear for every character. Manual points remain
+  // available for systems that do not yet have a preset.
+  scoringPresets: [
+    {
+      id: 'aedraco-art',
+      name: 'Aedraco artwork',
+      systemId: 'aedraco',
+      rules: [
+        {id: 'fullbody', name: 'Fullbody colored + shaded', points: 3},
+        {id: 'background', name: 'Background', points: 2},
+        {id: 'activity', name: 'Activity / prompt bonus', points: 2}
+      ]
+    }
   ],
   adjustments: [],
   rewards: [],

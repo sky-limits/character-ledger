@@ -77,4 +77,36 @@ assert.throws(()=>Core.validateWorkshopExport({...workshopBackup,history:[...wor
 const legacyWorkshop=Core.validateWorkshopExport({format:'character-ledger-inventory',version:1,inventory:{Stick:3}},state.crafting);
 assert.equal(legacyWorkshop.legacy,true,'v0.07 inventory exports should remain importable.');
 
+const nerissa=state.characters.find(character=>character.id==='nerissa');
+assert.deepEqual(Core.pointBreakdown(state,nerissa),{
+  opening:0,approved:114,pending:0,rejected:0,positive:0,negative:0,adjustments:0,total:114
+});
+const nerissaGoal=Core.characterGoal(state,nerissa);
+assert.equal(nerissaGoal.label,'Guardian');
+assert.equal(nerissaGoal.remaining,136);
+assert.equal(nerissaGoal.percentage,45.6);
+assert.deepEqual(Core.pointForecast(state,nerissa),{typicalXP:7,remaining:136,artworks:20,sampleSize:13});
+assert.equal(Core.pointTimeline(state,nerissa)[0].date,'2026-09-10','Dated point events should sort newest first.');
+assert.match(Core.pointWarnings(state)[0].message,/8 counted entries without a date/);
+
+const pointFixture=JSON.parse(JSON.stringify(state));
+pointFixture.characters[0].goalXP=150;
+pointFixture.art.push({id:'pending-test',characterId:'nerissa',title:'Awaiting review',image:'',xp:9,status:'pending',rolled:false,itemRewards:'',rewardsRedeemed:false,redemptionLink:'',credit:'',source:'',date:'2026-09-12',notes:''});
+pointFixture.adjustments.push({id:'bonus-test',characterId:'nerissa',amount:6,reason:'Event bonus',date:'2026-09-11'});
+const customGoal=Core.characterGoal(pointFixture,pointFixture.characters[0]);
+assert.equal(customGoal.label,'Custom point goal');
+assert.equal(customGoal.remaining,30);
+assert.equal(Core.pointBreakdown(pointFixture,pointFixture.characters[0]).pending,9,'Pending artwork should remain outside the total.');
+assert.equal(Core.pendingReview(pointFixture)[0].art.id,'pending-test');
+
+const aedracoPreset=state.scoringPresets.find(preset=>preset.id==='aedraco-art');
+const score=Core.scoreArtwork(aedracoPreset,{fullbody:1,background:1,activity:1},3,0);
+assert.equal(score.subtotal,7);
+assert.equal(score.total,21);
+assert.throws(()=>Core.scoreArtwork(aedracoPreset,{fullbody:101},1,0),/whole numbers from 0 to 100/);
+
+const invalidGoal=JSON.parse(JSON.stringify(sandbox.window.CHARACTER_LEDGER_SEED));
+invalidGoal.characters[0].goalRankId='missing-rank';
+assert.throws(()=>Core.validate(invalidGoal),/goal references a missing rank/);
+
 console.log('Character Ledger core tests passed.');

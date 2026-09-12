@@ -1,3 +1,47 @@
+CHARACTER LEDGER v0.09 — THE FIELD JOURNAL
+
+WHAT CHANGED
+- A separate Field Journal page shows every character’s next goal, progress,
+  and an artwork forecast based on that character’s median approved score.
+- Character pages now separate starting points, counted art, adjustments, and
+  pending points, followed by one chronological point history.
+- Rank milestones show reached and upcoming thresholds. A reached date appears
+  only when dated history can prove when the threshold was crossed.
+- Pending artwork has a single review queue and remains outside point totals.
+- Point health flags missing dates, possible duplicate artwork records, zero-
+  point approved artwork, and negative totals without changing any data.
+- The artwork scoring calculator supports owner-defined rules, quantities,
+  manual points, and multipliers, then creates a complete record to paste into
+  the art array. It never writes to the public site.
+
+CHARACTER GOALS
+Goals default to the next configured rank. To aim at a later rank, add its ID
+to a character. To use a point target instead, set goalXP to a positive number:
+  {
+    id: 'nerissa',
+    name: 'Nerissa',
+    systemId: 'aedraco',
+    openingXP: 0,
+    coverId: 'nerissa-ref',
+    tags: ['Sphinx'],
+    notes: '',
+    goalRankId: 'ancient',
+    goalXP: 0
+  }
+
+goalXP takes priority over goalRankId when it is greater than zero. Leave both
+blank/zero to keep using the next rank automatically.
+
+SCORING PRESETS
+Calculator rules live in scoringPresets in data.js. Each preset may target one
+species with systemId, or use an empty systemId to appear for every character.
+Rules are reusable point components; the calculator handles quantities,
+manual points, and the final multiplier. The included Aedraco preset mirrors
+the 3 + 2 + 2 breakdown already used in the artwork notes.
+
+The generated object is only a helper. Review it, paste it inside art: [ ], add
+the image file if needed, then commit and push data.js normally.
+
 CHARACTER LEDGER v0.08 — THE FORGE
 
 WHAT CHANGED
@@ -211,13 +255,14 @@ of the page using dev tools, same as on any static site, but it never
 reaches what’s actually hosted. Don’t put account credentials in the code.
 
 EDITING data.js
-It’s one big object with eight parts:
+It’s one big object with nine parts:
   systems       — species and their leveling rules
   characters    — names, species, starting XP, references, tags, notes
   art           — artwork records and the XP they’re worth
   adjustments   — manual XP bonuses or corrections
   rewards       — one-off earned rewards
   redemptions   — claim dates/notes for rewards already redeemed
+  scoringPresets — reusable artwork point rules for the calculator
   inventory     — shared owned item amounts and public defaults
   crafting      — recipes and required item amounts
 
@@ -237,7 +282,9 @@ ADD A CHARACTER
     openingXP: 0,
     coverId: '',
     tags: ['Optional tag'],
-    notes: ''
+    notes: '',
+    goalRankId: '',
+    goalXP: 0
   }
 systemId has to match a system’s id, or be '' if unassigned. coverId
 points to an art record’s id (not a filename) — leave it blank until

@@ -19,6 +19,88 @@
     const floor = current ? current.threshold : 0;
     return {system, xp, current, next, percentage:next ? Math.max(0,Math.min(100,100*(xp-floor)/(next.threshold-floor))) : 100, remaining:next ? next.threshold-xp : 0,maxed:!next,configured:true};
   }
+  const rounded = value => Math.round(value*100)/100;
+  function pointBreakdown(state, character) {
+    const rows=state.art.filter(art=>art.characterId===character.id),adjustments=state.adjustments.filter(item=>item.characterId===character.id);
+    const approved=rounded(rows.filter(art=>art.status==='approved').reduce((sum,art)=>sum+art.xp,0));
+    const pending=rounded(rows.filter(art=>art.status==='pending').reduce((sum,art)=>sum+art.xp,0));
+    const rejected=rounded(rows.filter(art=>art.status==='rejected').reduce((sum,art)=>sum+art.xp,0));
+    const positive=rounded(adjustments.filter(item=>item.amount>0).reduce((sum,item)=>sum+item.amount,0));
+    const negative=rounded(adjustments.filter(item=>item.amount<0).reduce((sum,item)=>sum+item.amount,0));
+    return {opening:character.openingXP,approved,pending,rejected,positive,negative,adjustments:rounded(positive+negative),total:totalXP(state,character)};
+  }
+  function pointTimeline(state, character) {
+    const rows=[];
+    if(character.openingXP)rows.push({id:'opening-'+character.id,kind:'opening',title:'Starting balance',date:'',amount:character.openingXP,status:'approved',counts:true});
+    state.art.forEach((art,index)=>{if(art.characterId===character.id)rows.push({id:art.id,kind:'art',title:art.title,date:art.date,amount:art.xp,status:art.status,counts:art.status==='approved',sourceIndex:index});});
+    state.adjustments.forEach((item,index)=>{if(item.characterId===character.id)rows.push({id:item.id,kind:'adjustment',title:item.reason||'Manual adjustment',date:item.date?item.date.slice(0,10):'',amount:item.amount,status:'approved',counts:true,sourceIndex:index});});
+    return rows.sort((a,b)=>{
+      const dated=Number(Boolean(b.date))-Number(Boolean(a.date));
+      if(dated)return dated;
+      if(a.date!==b.date)return b.date.localeCompare(a.date);
+      return (b.sourceIndex||0)-(a.sourceIndex||0);
+    });
+  }
+  function characterGoal(state, character) {
+    const p=progress(state,character),system=p.system;
+    if(!system)return {configured:false,label:'No point system',target:null,remaining:null,percentage:0,complete:false,custom:false,rank:null};
+    const rank=character.goalRankId?system.ranks.find(item=>item.id===character.goalRankId)||null:null;
+    const custom=character.goalXP>0;
+    const target=custom?character.goalXP:rank?.threshold??p.next?.threshold??p.current?.threshold??null;
+    const label=custom?'Custom point goal':rank?.name||p.next?.name||p.current?.name||'No goal configured';
+    const remaining=target===null?null:rounded(Math.max(0,target-p.xp));
+    return {configured:target!==null,label,target,remaining,percentage:target?Math.max(0,Math.min(100,rounded(p.xp/target*100))):100,complete:target!==null&&p.xp>=target,custom,rank:rank||(!custom?p.next||p.current:null),system,xp:p.xp};
+  }
+  function pointForecast(state, character, targetXP) {
+    const approved=state.art.filter(art=>art.characterId===character.id&&art.status==='approved'&&art.xp>0).map(art=>art.xp).sort((a,b)=>a-b);
+    const middle=Math.floor(approved.length/2);
+    const typical=approved.length?(approved.length%2?approved[middle]:(approved[middle-1]+approved[middle])/2):0;
+    const goal=characterGoal(state,character),target=Number.isFinite(targetXP)?targetXP:goal.target;
+    const remaining=target===null?null:rounded(Math.max(0,target-totalXP(state,character)));
+    return {typicalXP:rounded(typical),remaining,artworks:remaining===null||!typical?null:Math.ceil(remaining/typical),sampleSize:approved.length};
+  }
+  function rankMilestones(state, character) {
+    const p=progress(state,character);if(!p.system)return [];
+    const events=pointTimeline(state,character).filter(row=>row.counts&&row.kind!=='opening'&&row.date).sort((a,b)=>a.date.localeCompare(b.date));
+    return p.system.ranks.map(rank=>{
+      if(p.xp<rank.threshold)return {rank,reached:false,date:''};
+      if(character.openingXP>=rank.threshold)return {rank,reached:true,date:'',source:'Starting balance'};
+      let running=character.openingXP,date='';
+      for(const event of events){running=rounded(running+event.amount);if(running>=rank.threshold){date=event.date;break;}}
+      return {rank,reached:true,date,source:date?'Point history':'Date unavailable'};
+    });
+  }
+  function pendingReview(state) {
+    return state.art.filter(art=>art.status==='pending').map(art=>({art,character:state.characters.find(character=>character.id===art.characterId),system:state.systems.find(system=>system.id===state.characters.find(character=>character.id===art.characterId)?.systemId)})).sort((a,b)=>(b.art.date||'').localeCompare(a.art.date||'')||a.art.title.localeCompare(b.art.title));
+  }
+  function pointWarnings(state) {
+    const warnings=[];
+    for(const character of state.characters){
+      const approved=state.art.filter(art=>art.characterId===character.id&&art.status==='approved');
+      const undated=approved.filter(art=>!art.date).length+state.adjustments.filter(item=>item.characterId===character.id&&!item.date).length;
+      if(undated)warnings.push({type:'missing-date',characterId:character.id,message:character.name+' has '+undated+' counted '+(undated===1?'entry':'entries')+' without a date.'});
+      if(totalXP(state,character)<0)warnings.push({type:'negative-total',characterId:character.id,message:character.name+' has a negative point total.'});
+      if(approved.some(art=>art.xp===0))warnings.push({type:'zero-points',characterId:character.id,message:character.name+' has counted artwork worth 0 points.'});
+      const groups=new Map();
+      for(const art of state.art.filter(item=>item.characterId===character.id)){
+        const key=[art.title.trim().toLocaleLowerCase(),art.date,art.xp].join('|');groups.set(key,[...(groups.get(key)||[]),art]);
+      }
+      for(const duplicates of groups.values())if(duplicates.length>1)warnings.push({type:'possible-duplicate',characterId:character.id,message:character.name+' may have duplicate artwork records: '+duplicates.map(art=>art.id).join(', ')+'.'});
+    }
+    return warnings;
+  }
+  function scoreArtwork(preset, quantities={}, multiplier=1, custom=0) {
+    const safeMultiplier=Number(multiplier),safeCustom=Number(custom);
+    assert(preset&&Array.isArray(preset.rules),'Choose a valid scoring preset.');
+    assert(Number.isFinite(safeMultiplier)&&safeMultiplier>=1&&safeMultiplier<=100,'Multiplier must be from 1 to 100.');
+    assert(Number.isFinite(safeCustom)&&safeCustom>=0&&safeCustom<=MAX_XP,'Manual points must be from 0 to 1,000,000,000.');
+    const breakdown=preset.rules.map(rule=>{
+      const quantity=Number(quantities[rule.id]||0);assert(Number.isInteger(quantity)&&quantity>=0&&quantity<=100,'Rule quantities must be whole numbers from 0 to 100.');
+      return {id:rule.id,name:rule.name,points:rule.points,quantity,subtotal:rounded(rule.points*quantity)};
+    }).filter(row=>row.quantity>0);
+    const subtotal=rounded(breakdown.reduce((sum,row)=>sum+row.subtotal,0)+safeCustom);
+    return {breakdown,custom:rounded(safeCustom),multiplier:safeMultiplier,subtotal,total:rounded(subtotal*safeMultiplier)};
+  }
   function rewardRows(state) {
     const rows = state.rewards.map(r => ({...r,key:'manual:'+r.id,kind:'Manual',eligible:true}));
     for (const c of state.characters) {
@@ -130,10 +212,11 @@
     const num=(v,label,negative=false)=>assert(Number.isFinite(v)&&Math.abs(v)<=MAX_XP&&(negative||v>=0)&&Math.abs(v*100-Math.round(v*100))<0.0001,'Invalid '+label+' (use up to two decimal places).');
     const records=(key,max)=>{assert(Array.isArray(d[key])&&d[key].length<=max,'Invalid '+key+' list.');const ids=new Set();for(const r of d[key]){assert(r&&typeof r==='object','Invalid record.');id(r.id);assert(!ids.has(r.id),'Duplicate '+key+' ID.');ids.add(r.id);}return ids;};
     if(d.crafting===undefined)d.crafting=[];
+    if(d.scoringPresets===undefined)d.scoringPresets=[];
     const systems=records('systems',300),chars=records('characters',5000),arts=records('art',20000);
     records('adjustments',50000);records('rewards',20000);
     for(const s of d.systems){str(s.name,'species name',160);str(s.xpName,'XP name',40);str(s.levelName,'level name',40);str(s.baseName,'starting rank',160);assert(s.name.trim()&&s.xpName.trim()&&s.levelName.trim(),'Species and unit labels cannot be empty.');assert(Array.isArray(s.ranks)&&s.ranks.length<=200,'Invalid ranks.');const ri=new Set();let prev=-1;for(const r of s.ranks){id(r.id);assert(!ri.has(r.id),'Duplicate rank ID.');ri.add(r.id);str(r.name,'rank name',160);assert(r.name.trim(),'A rank needs a name.');num(r.threshold,'rank threshold');assert(r.threshold>prev,'Rank thresholds must be unique and increasing.');prev=r.threshold;str(r.reward,'rank reward',1000);}}
-    for(const c of d.characters){str(c.name,'character name',160);assert(c.name.trim(),'A character needs a name.');assert(c.systemId===''||systems.has(c.systemId),'A character references a missing species.');num(c.openingXP,'starting XP');str(c.notes,'notes');assert(Array.isArray(c.tags)&&c.tags.length<=30,'Invalid tags.');c.tags.forEach(t=>str(t,'tag',80));assert(c.coverId===''||arts.has(c.coverId),'Missing reference image.');}
+    for(const c of d.characters){if(c.goalRankId===undefined)c.goalRankId='';if(c.goalXP===undefined)c.goalXP=0;str(c.name,'character name',160);assert(c.name.trim(),'A character needs a name.');assert(c.systemId===''||systems.has(c.systemId),'A character references a missing species.');num(c.openingXP,'starting XP');str(c.notes,'notes');assert(Array.isArray(c.tags)&&c.tags.length<=30,'Invalid tags.');c.tags.forEach(t=>str(t,'tag',80));assert(c.coverId===''||arts.has(c.coverId),'Missing reference image.');str(c.goalRankId,'goal rank ID',100);num(c.goalXP,'custom point goal');const system=d.systems.find(s=>s.id===c.systemId);assert(!c.goalRankId||system?.ranks.some(r=>r.id===c.goalRankId),'A character goal references a missing rank.');}
     for(const a of d.art){
       try {
         for(const key of ['credit','source','date','notes','itemRewards','redemptionLink']) if(a[key]===undefined)a[key]='';
@@ -153,6 +236,9 @@
     for(const c of d.characters){assert(!c.coverId||d.art.some(a=>a.id===c.coverId&&a.characterId===c.id),'Main reference belongs to another character.');num(totalXP(d,c),'total XP');}
     for(const a of d.adjustments){assert(chars.has(a.characterId),'XP adjustment references a missing character.');num(a.amount,'XP adjustment',true);str(a.reason,'adjustment reason',1000);str(a.date,'adjustment date',40);}
     for(const r of d.rewards){assert(chars.has(r.characterId),'Reward references a missing character.');str(r.title,'reward',1000);assert(r.title.trim(),'A reward needs a title.');str(r.notes,'reward notes');assert(!r.artId||d.art.some(a=>a.id===r.artId&&a.characterId===r.characterId),'Reward art belongs to another character or is missing.');}
+    assert(Array.isArray(d.scoringPresets)&&d.scoringPresets.length<=200,'Invalid scoring preset list.');
+    const scoringPresets=[],presetIds=new Set();
+    for(const preset of d.scoringPresets){id(preset.id);assert(!presetIds.has(preset.id),'Duplicate scoring preset ID.');presetIds.add(preset.id);str(preset.name,'scoring preset name',160);assert(preset.name.trim(),'A scoring preset needs a name.');assert(preset.systemId===''||systems.has(preset.systemId),'A scoring preset references a missing species.');assert(Array.isArray(preset.rules)&&preset.rules.length>0&&preset.rules.length<=30,'A scoring preset needs 1–30 rules.');const ruleIds=new Set(),rules=[];for(const rule of preset.rules){id(rule.id);assert(!ruleIds.has(rule.id),'Duplicate scoring rule ID.');ruleIds.add(rule.id);str(rule.name,'scoring rule name',160);assert(rule.name.trim(),'A scoring rule needs a name.');num(rule.points,'scoring rule points');rules.push({id:rule.id,name:rule.name,points:rule.points});}scoringPresets.push({id:preset.id,name:preset.name,systemId:preset.systemId,rules});}
     const craftingWarnings=[],crafting=[],craftingIds=new Set(),legacyInventory={};
     if(!Array.isArray(d.crafting)){
       craftingWarnings.push('The crafting list is not an array, so no recipes were loaded.');
@@ -198,8 +284,8 @@
     const validKeys=new Set(d.rewards.map(r=>'manual:'+r.id));
     for(const c of d.characters)for(const r of d.systems.find(s=>s.id===c.systemId)?.ranks||[])validKeys.add('rank:'+c.id+':'+r.id);
     for(const [key,value] of Object.entries(d.redemptions)){assert(validKeys.has(key),'Redemption references a missing reward.');assert(value&&typeof value==='object','Invalid redemption.');str(value.date,'redemption date',40);assert(Number.isFinite(Date.parse(value.date)),'Invalid redemption date.');str(value.note,'redemption note',2000);}
-    return {format:d.format,version:d.version,systems:d.systems,characters:d.characters,art:d.art,adjustments:d.adjustments,rewards:d.rewards,redemptions:d.redemptions,inventory,crafting,craftingWarnings};
+    return {format:d.format,version:d.version,systems:d.systems,characters:d.characters,art:d.art,adjustments:d.adjustments,rewards:d.rewards,redemptions:d.redemptions,scoringPresets,inventory,crafting,craftingWarnings};
   }
-  root.LedgerCore={totalXP,progress,rewardRows,inventoryAmount,craftingProgress,normalizeCraftingPlan,planCrafting,shoppingList,validateInventoryExport,validateWorkshopExport,validate,safeURL,copy};
+  root.LedgerCore={totalXP,progress,pointBreakdown,pointTimeline,characterGoal,pointForecast,rankMilestones,pendingReview,pointWarnings,scoreArtwork,rewardRows,inventoryAmount,craftingProgress,normalizeCraftingPlan,planCrafting,shoppingList,validateInventoryExport,validateWorkshopExport,validate,safeURL,copy};
   if(typeof module!=='undefined')module.exports=root.LedgerCore;
 })(typeof window!=='undefined'?window:globalThis);
