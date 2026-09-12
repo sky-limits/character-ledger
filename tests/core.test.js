@@ -15,13 +15,14 @@ assert.ok(state.systems.every(system=>system.pointMode==='cumulative'),'Every st
 assert.deepEqual(Core.dataSummary(state),{characters:7,art:19,localImages:13,externalImages:6,withoutImages:0,links:1,dated:11,undated:8,systems:2,recipes:1,scoringPresets:1});
 const spear = state.crafting.find(recipe=>recipe.id==='spear');
 assert.ok(spear,'Spear recipe should load.');
-assert.deepEqual(Core.craftingProgress(spear,state.inventory),{
+const craftingFixtureInventory={Stick:1,Thread:1,Arrowhead:0};
+assert.deepEqual(Core.craftingProgress(spear,craftingFixtureInventory),{
   required:27,
   have:2,
   percentage:7.41,
   complete:false
 });
-assert.deepEqual(Core.shoppingList(state.crafting,state.inventory).map(row=>[row.item,row.missing]),[
+assert.deepEqual(Core.shoppingList(state.crafting,craftingFixtureInventory).map(row=>[row.item,row.missing]),[
   ['Arrowhead',2],
   ['Stick',19],
   ['Thread',4]

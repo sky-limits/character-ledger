@@ -13,8 +13,8 @@ change characters, points, artwork, ranks, rewards, or public recipe defaults.
 5. Open the live site and confirm the changed record.
 
 The automated release check catches JavaScript errors, invalid records, missing
-local images, stale cache versions, and regressions in the Field Journal and
-Forge. A failed check should be fixed before merging.
+local images, stale cache versions, and regressions in the Field Journal, Forge,
+and v1.01 enhancement helpers. A failed check should be fixed before merging.
 
 ## Stable data contract
 
@@ -32,6 +32,47 @@ The root object remains `format: 'character-ledger', version: 1`. Schema version
 
 New optional fields may be added in future 1.x versions. Existing fields will
 not be removed or reinterpreted without a documented migration.
+
+## v1.01 visual overrides
+
+System accent colors are assigned automatically from the site palette. To pin a
+specific color for a species, add an optional `accent` value to that system in
+`data.js`:
+
+```js
+{id:'aedraco', name:'Aedraco', accent:'#94d7ed', ...}
+```
+
+Character cover images still use `object-fit: cover`, but artwork can now supply
+an optional focal point. Coordinates are percentages from the left and top:
+
+```js
+{
+  id:'example-art',
+  characterId:'nerissa',
+  title:'Example',
+  image:'images/example.jpg',
+  focalPoint:{x:42,y:28},
+  ...
+}
+```
+
+`focalPoint:'42% 28%'` and `focalPoint:[42,28]` are also accepted by the visual
+enhancement layer. Omit the field for the normal centered crop.
+
+Forge requirements receive automatic visual item tokens based on their names.
+If an item has custom icon artwork, add an optional `icon` to any requirement
+using that item. The first icon found for that item name is reused everywhere in
+the Forge:
+
+```js
+requirements:[
+  {item:'Silk Thread',required:3,icon:'images/items/silk-thread.png'}
+]
+```
+
+These visual fields are additive. They do not change point totals, crafting
+math, exports, or schema version 1 compatibility.
 
 ## Point rules
 
@@ -69,6 +110,7 @@ and run:
 
 ```bash
 node --check data.js
+node --check enhancements.js
 node tests/release.test.js
 ```
 

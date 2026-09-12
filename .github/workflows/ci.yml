@@ -24,9 +24,11 @@ jobs:
           node --check data.js
           node --check core.js
           node --check app.js
+          node --check enhancements.js
       - name: Run tracker tests
         run: |
           node tests/core.test.js
           node tests/app.test.js
           node tests/journal.test.js
+          node tests/enhancements.test.js
           node tests/release.test.js
