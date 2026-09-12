@@ -250,7 +250,8 @@ window.CHARACTER_LEDGER_SEED = {
   inventory: {
     Stick: 1,
     Thread: 1,
-    Arrowhead: 0
+    Arrowhead: 0,
+    Bilberries: 1 
   },
 
   crafting: [
