@@ -8,10 +8,12 @@
   <meta name="description" content="Where I keep track of my OCs — art, GP, rank progress, rewards, and crafting plans.">
   <title>Character Ledger</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101b2c'/%3E%3Cpath d='M32 7l6 18 19 7-19 7-6 18-6-18-19-7 19-7z' fill='%2394d7ed'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=1.00">
-  <script src="data.js?v=1.00" defer></script>
-  <script src="core.js?v=1.00" defer></script>
-  <script src="app.js?v=1.00" defer></script>
+  <link rel="stylesheet" href="style.css?v=1.01">
+  <link rel="stylesheet" href="enhancements.css?v=1.01">
+  <script src="data.js?v=1.01" defer></script>
+  <script src="core.js?v=1.01" defer></script>
+  <script src="app.js?v=1.01" defer></script>
+  <script src="enhancements.js?v=1.01" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -19,14 +21,14 @@
     <a href="#characters" class="brand"><span class="brand-mark" aria-hidden="true">✦</span><span>Character<br><strong>Ledger</strong></span></a>
     <p class="nav-label">MY COLLECTION</p>
     <nav aria-label="Main navigation">
-      <a href="#characters" data-nav="characters"><span aria-hidden="true">◈</span>Characters</a>
-      <a href="#progress" data-nav="progress"><span aria-hidden="true">↗</span>Rank progress</a>
-      <a href="#journal" data-nav="journal"><span aria-hidden="true">✎</span>Field journal</a>
-      <a href="#rewards" data-nav="rewards"><span aria-hidden="true">◇</span>Rewards <span id="reward-count" class="nav-count"></span></a>
-      <a href="#crafting" data-nav="crafting"><span aria-hidden="true">⌁</span>Crafting</a>
-      <a href="#species" data-nav="species"><span aria-hidden="true">≡</span>Species & ranks</a>
+      <a href="#characters" data-nav="characters"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><path d="M12 5v14M5 12h14"></path></svg></span>Characters</a>
+      <a href="#progress" data-nav="progress"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 18 10 13l3 3 6-9"></path><path d="M14 7h5v5"></path></svg></span>Rank progress</a>
+      <a href="#journal" data-nav="journal"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 5.5A2.5 2.5 0 0 1 8.5 3H19v16H8.5A2.5 2.5 0 0 0 6 21.5z"></path><path d="M6 5.5v16M10 7h5M10 11h5"></path></svg></span>Field journal</a>
+      <a href="#rewards" data-nav="rewards"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 19 7v10l-7 4-7-4V7z"></path><path d="m8.5 11 2.2 2.2 4.8-4.8"></path></svg></span>Rewards <span id="reward-count" class="nav-count"></span></a>
+      <a href="#crafting" data-nav="crafting"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19 19 5M7 5l12 12"></path><path d="m4 20 4-1-3-3zM20 4l-4 1 3 3z"></path></svg></span>Crafting</a>
+      <a href="#species" data-nav="species"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14"></path><circle cx="8" cy="6" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="10" cy="18" r="1"></circle></svg></span>Species & ranks</a>
     </nav>
-    <div class="sidebar-bottom"><p>Finch’s character collection</p><small>Stable release · v1.00</small></div>
+    <div class="sidebar-bottom"><p>Finch’s character collection</p><small>Stable release · v1.01</small></div>
   </aside>
   <div class="workspace">
     <main id="main" tabindex="-1"><div class="empty"><h1>Loading…</h1><p>Give it a second.</p></div></main>
@@ -45,7 +47,7 @@
       <div class="modal-actions"><button type="button" data-action="close-inventory-import">Cancel</button><button type="submit" class="primary">Import backup</button></div>
     </form>
   </dialog>
-  <dialog id="lightbox" aria-label="Artwork"><button class="lightbox-close" aria-label="Close artwork">Close ×</button><img alt=""><p></p></dialog>
+  <dialog id="lightbox" aria-label="Artwork"><button class="lightbox-close" aria-label="Close artwork">Close ×</button><div class="lightbox-stage"><button type="button" class="lightbox-nav prev" data-lightbox-nav="-1" aria-label="Previous artwork">‹</button><img alt=""><button type="button" class="lightbox-nav next" data-lightbox-nav="1" aria-label="Next artwork">›</button></div><p></p></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
   <noscript><p class="noscript">Please enable JavaScript to use the character tracker.</p></noscript>
 </body>
