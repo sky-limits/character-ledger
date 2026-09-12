@@ -268,7 +268,7 @@ window.CHARACTER_LEDGER_SEED = {
     Arrowhead: 0,
     Bilberries: 1,
     Pumpkin: 7,
-    Map Pieces: 6,
+    Map: 6,
     Leather: 2
   },
 
