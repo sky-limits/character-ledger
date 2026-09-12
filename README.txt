@@ -70,8 +70,8 @@ Add this inside the existing crafting array in data.js:
 Each recipe ID must be unique. required must be greater than zero. The progress
 bar counts shared inventory items up to the amount required,
 so extra inventory will not push progress past 100%. A requirement is complete
-when have is equal to or greater than required. Leave the example recipe
-commented out if you do not have any plans to show yet.
+when the shared inventory amount is equal to or greater than required. Leave
+the example recipe commented out if you do not have any plans to show yet.
 
 CHARACTER LEDGER v0.04 — PREVIOUS UPDATE NOTES
 
@@ -136,14 +136,14 @@ before overwriting — this data.js doesn’t know about them, and updating
 won’t reach into the old browser storage to pull anything in or wipe it.
 
 HOW THE SITE ACTUALLY WORKS
-I edit data.js — through the Neocities text editor or locally — and that’s
+I edit data.js — through GitHub or locally — and that’s
 the whole publishing flow. No backend, no login screen, nothing else
 touches the live files. A visitor can mess with their own browser’s copy
 of the page using dev tools, same as on any static site, but it never
 reaches what’s actually hosted. Don’t put account credentials in the code.
 
 EDITING data.js
-It’s one big object with seven parts:
+It’s one big object with eight parts:
   systems       — species and their leveling rules
   characters    — names, species, starting XP, references, tags, notes
   art           — artwork records and the XP they’re worth
