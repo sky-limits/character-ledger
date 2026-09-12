@@ -1,6 +1,8 @@
 # Character Ledger
 
-Finch's read-only character, artwork, progression, reward, and crafting tracker.
+Finch's character, artwork, progression, reward, and crafting tracker. Published
+records remain read-only; crafting inventory can be adjusted and saved locally
+in each browser.
 The site is plain HTML, CSS, and JavaScript with no build step or database.
 
 ## Deploy on Vercel
@@ -15,8 +17,8 @@ deployment. Other branches and pull requests can be used for previews.
 
 ## Update the tracker
 
-Edit `data.js` to add or change characters, artwork, ranks, rewards, and
-crafting plans. Add local artwork files beneath `images/`. Full record examples
+Edit `data.js` to add or change characters, artwork, ranks, rewards, the shared
+inventory defaults, and crafting plans. Add local artwork files beneath `images/`. Full record examples
 and data rules are documented in `README.txt`.
 
 Before committing, check the JavaScript files:
@@ -25,6 +27,8 @@ Before committing, check the JavaScript files:
 node --check data.js
 node --check core.js
 node --check app.js
+node tests/core.test.js
+node tests/app.test.js
 ```
 
 When changing `data.js`, `core.js`, `app.js`, or `style.css`, also increment

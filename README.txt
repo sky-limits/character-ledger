@@ -1,4 +1,40 @@
-CHARACTER LEDGER v0.05.1 — UPDATE NOTES
+CHARACTER LEDGER v0.07 — WORKSHOP UPDATE
+
+WHAT CHANGED
+- Crafting now uses one shared inventory instead of a separate have amount in
+  every recipe.
+- Inventory has accessible plus/minus controls and number fields on the site.
+- Inventory changes save in this browser with localStorage and never change the
+  public data.js file.
+- The gathering list combines missing materials across every valid recipe.
+- Inventory can be exported as a JSON backup or reset to the data.js defaults.
+- A malformed crafting recipe or inventory entry is skipped with a visible
+  warning on the Crafting page instead of breaking the entire ledger.
+
+SHARED INVENTORY
+Set the public defaults once in data.js:
+  inventory: {
+    Stick: 1,
+    Thread: 1,
+    Arrowhead: 0
+  },
+
+Recipes only say what they require:
+  {
+    id: 'healing-potion',
+    name: 'Healing potion',
+    requirements: [
+      {item: 'Bilberries', required: 5},
+      {item: 'Thread', required: 1}
+    ]
+  }
+
+Item names are case-sensitive and should match the inventory keys exactly.
+If a recipe uses a valid item that is missing from inventory, it starts at 0.
+Old recipes containing have still load for compatibility, but new recipes
+should keep owned amounts in inventory only.
+
+CHARACTER LEDGER v0.05.1 — PREVIOUS UPDATE NOTES
 
 VERCEL DEPLOYMENT
 This folder is now the source for the sky-limits/character-ledger repository.
@@ -15,10 +51,10 @@ Remove only the /* and */ surrounding the example recipe. Do not uncomment or
 add another "crafting: [" line. This prevents the syntax error that previously
 stopped every page from loading.
 
-A separate Crafting page now tracks recipes, required items, items already
-owned, and overall progress. Add or update recipes in the crafting array in
-data.js; progress recalculates automatically. Recipes that are ready to make
-appear after in-progress recipes.
+A separate Crafting page tracks recipes, required items, items already owned,
+and overall progress. Add or update recipes in the crafting array in data.js;
+progress recalculates automatically. Recipes that are ready to make appear
+after in-progress recipes.
 
 CRAFTING PLANS
 Add this inside the existing crafting array in data.js:
@@ -26,13 +62,13 @@ Add this inside the existing crafting array in data.js:
     id: 'healing-potion',
     name: 'Healing potion',
     requirements: [
-      {item: 'Bilberries', required: 5, have: 2},
-      {item: 'Thread', required: 1, have: 1}
+      {item: 'Bilberries', required: 5},
+      {item: 'Thread', required: 1}
     ]
   }
 
-Each recipe ID must be unique. required must be greater than zero. have can be
-zero or more. The progress bar counts owned items up to the amount required,
+Each recipe ID must be unique. required must be greater than zero. The progress
+bar counts shared inventory items up to the amount required,
 so extra inventory will not push progress past 100%. A requirement is complete
 when have is equal to or greater than required. Leave the example recipe
 commented out if you do not have any plans to show yet.
@@ -114,7 +150,8 @@ It’s one big object with seven parts:
   adjustments   — manual XP bonuses or corrections
   rewards       — one-off earned rewards
   redemptions   — claim dates/notes for rewards already redeemed
-  crafting      — recipes and owned/required item amounts
+  inventory     — shared owned item amounts and public defaults
+  crafting      — recipes and required item amounts
 
 Keep "window.CHARACTER_LEDGER_SEED = {" and the closing "};" intact — don’t
 replace the whole file with one of the examples below, just drop new

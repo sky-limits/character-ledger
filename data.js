@@ -1,4 +1,4 @@
-/* OWNER-EDITED SITE DATA — v0.05.1
+/* OWNER-EDITED SITE DATA — v0.07
    Edit this file in GitHub or a text editor, then commit it to the repository.
    This is the only source of character records. Visitors cannot submit edits.
    See README.txt for copy/paste examples for characters, artwork, and rewards.
@@ -244,16 +244,24 @@ window.CHARACTER_LEDGER_SEED = {
   rewards: [],
   redemptions: {},
 
+  // One shared inventory powers every crafting recipe. The website can adjust
+  // these numbers in this browser; edit these defaults to change them for
+  // everyone on the next deployment.
+  inventory: {
+    Stick: 1,
+    Thread: 1,
+    Arrowhead: 0
+  },
+
   crafting: [
     {
       id: 'spear',
-      name: 'spear',
+      name: 'Spear',
       requirements: [
-        {item: 'Stick', required: 20, have: 1},
-        {item: 'Thread', required: 5, have: 1},
-        {item: 'Arrowhead', required: 2, have: 0}
+        {item: 'Stick', required: 20},
+        {item: 'Thread', required: 5},
+        {item: 'Arrowhead', required: 2}
       ]
     }
-  
   ]
 };

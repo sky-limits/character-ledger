@@ -1,10 +1,11 @@
-/* Character Ledger v0.05.1 — read-only static site. Edit records in data.js. */
+/* Character Ledger v0.07 — published records are read-only; crafting inventory saves locally. */
 (function(){
 'use strict';
 const C=window.LedgerCore, $=s=>document.querySelector(s), E=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>new Intl.NumberFormat(undefined,{maximumFractionDigits:2}).format(n);
 const selected=(a,b)=>a===b?' selected':'';
-let state,toastTimer,filter={q:'',species:'',status:'',sort:location.hash==='#progress'?'progress':'name',rank:''};
+const INVENTORY_KEY='character-ledger-inventory-v1';
+let state,inventory={},toastTimer,filter={q:'',species:'',status:'',sort:location.hash==='#progress'?'progress':'name',rank:''};
 const main=$('#main');
 function toast(text){$('#toast').textContent=text;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4500);}
 function character(id){return state.characters.find(c=>c.id===id);}
@@ -47,26 +48,61 @@ function rewardCard(r) {
   const c=character(r.characterId),art=state.art.find(a=>a.id===r.artId);
   return `<article class="reward ${r.redemption?'redeemed':!r.eligible?'locked':''}"><div><span class="badge ${r.redemption?'good':r.eligible?'purple':''}">${r.redemption?'Redeemed':r.eligible?'Ready to redeem':'Locked'} · ${r.kind}</span><h3>${E(r.title)}</h3><p><a href="#character/${c.id}">${E(c.name)}</a>${art?' · <a href="#character/'+c.id+'/art/'+art.id+'">'+E(art.title)+'</a>':''}</p>${r.notes?`<p class="notes inline-help">${E(r.notes)}</p>`:''}${r.redemption?`<small>Redeemed ${r.redemption.date?E(new Date(r.redemption.date).toLocaleDateString()):''}${r.redemption.note?' · '+E(r.redemption.note):''}${!r.eligible?' · current XP is below this threshold':''}</small>${r.redemption.link?`<p><a href="${E(r.redemption.link)}" target="_blank" rel="noopener noreferrer">Redemption link ↗</a></p>`:''}`:''}</div></article>`;
 }
+function loadInventory(seed) {
+  const next={...seed};
+  try {
+    const saved=JSON.parse(localStorage.getItem(INVENTORY_KEY)||'{}');
+    if(saved&&typeof saved==='object'&&!Array.isArray(saved))for(const [item,amount] of Object.entries(saved))if(Number.isFinite(amount)&&amount>=0)next[item]=amount;
+  } catch(error) {console.warn('Could not load saved crafting inventory.',error);}
+  return next;
+}
+function saveInventory() {
+  try {localStorage.setItem(INVENTORY_KEY,JSON.stringify(inventory));return true;}
+  catch(error){console.warn('Could not save crafting inventory.',error);toast('This browser could not save the inventory.');return false;}
+}
+function setInventory(item,value) {
+  if(!(item in inventory))return;
+  const amount=Math.max(0,Math.min(1000000000,Math.round(Number(value)*100)/100));
+  if(!Number.isFinite(amount))return;
+  inventory[item]=amount;saveInventory();renderCrafting();
+}
+function inventoryEditor(item) {
+  const amount=C.inventoryAmount(inventory,item);
+  return `<div class="inventory-row"><span>${E(item)}</span><div class="quantity-control">
+    <button class="small" data-action="inventory-adjust" data-item="${E(item)}" data-delta="-1" aria-label="Remove one ${E(item)}">−</button>
+    <label><span class="sr-only">${E(item)} owned</span><input type="number" min="0" max="1000000000" step="1" value="${amount}" data-inventory-item="${E(item)}"></label>
+    <button class="small" data-action="inventory-adjust" data-item="${E(item)}" data-delta="1" aria-label="Add one ${E(item)}">+</button>
+  </div></div>`;
+}
 function craftingMeter(recipe,p) {
   return `<div class="meter crafting-meter" role="progressbar" aria-label="${E(recipe.name)} crafting progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p.percentage)}"><span style="width:${p.percentage}%"></span></div>`;
 }
 function craftingCard(recipe) {
-  const p=C.craftingProgress(recipe);
+  const p=C.craftingProgress(recipe,inventory);
   return `<article class="panel crafting-card">
     <div class="crafting-card-head"><div><span class="badge ${p.complete?'good':'purple'}">${p.complete?'Ready to craft':'Gathering items'}</span><h2>${E(recipe.name)}</h2></div><strong>${fmt(p.percentage)}%</strong></div>
     ${craftingMeter(recipe,p)}
-    <div class="crafting-summary"><span>${fmt(p.have)} of ${fmt(p.required)} total items ready</span><span>${recipe.requirements.filter(item=>item.have>=item.required).length} of ${recipe.requirements.length} requirements complete</span></div>
+    <div class="crafting-summary"><span>${fmt(p.have)} of ${fmt(p.required)} total items ready</span><span>${recipe.requirements.filter(item=>C.inventoryAmount(inventory,item.item)>=item.required).length} of ${recipe.requirements.length} requirements complete</span></div>
     <div class="crafting-items" role="list" aria-label="Requirements for ${E(recipe.name)}">
-      ${recipe.requirements.map(item=>{const done=item.have>=item.required;return `<div class="crafting-item ${done?'complete':''}" role="listitem"><span class="crafting-check" aria-hidden="true">${done?'✓':'○'}</span><span>${E(item.item)}</span><strong>${fmt(item.have)} / ${fmt(item.required)}</strong></div>`;}).join('')}
+      ${recipe.requirements.map(item=>{const have=C.inventoryAmount(inventory,item.item),done=have>=item.required;return `<div class="crafting-item ${done?'complete':''}" role="listitem"><span class="crafting-check" aria-hidden="true">${done?'✓':'○'}</span><span>${E(item.item)}</span><strong>${fmt(have)} / ${fmt(item.required)}</strong></div>`;}).join('')}
     </div>
   </article>`;
 }
 function renderCrafting() {
-  const recipes=[...state.crafting].sort((a,b)=>C.craftingProgress(a).complete-C.craftingProgress(b).complete||a.name.localeCompare(b.name));
-  const ready=recipes.filter(recipe=>C.craftingProgress(recipe).complete).length;
-  main.innerHTML=head('Crafting plans','What I want to make and what I still need.','','THE WORKBENCH')+
-    (recipes.length?`<div class="crafting-overview"><div><strong>${recipes.length}</strong><span>${recipes.length===1?'recipe':'recipes'} planned</span></div><div><strong>${ready}</strong><span>ready to craft</span></div></div>`:'')+
-    `<div class="crafting-grid">${recipes.map(craftingCard).join('')||blank('No crafting plans yet','Add your first recipe to the crafting list in data.js.')}</div>`;
+  const recipes=[...state.crafting].sort((a,b)=>C.craftingProgress(a,inventory).complete-C.craftingProgress(b,inventory).complete||a.name.localeCompare(b.name));
+  const ready=recipes.filter(recipe=>C.craftingProgress(recipe,inventory).complete).length;
+  const items=[...new Set([...Object.keys(inventory),...recipes.flatMap(recipe=>recipe.requirements.map(item=>item.item))])].sort((a,b)=>a.localeCompare(b));
+  const missing=C.shoppingList(recipes,inventory);
+  const warnings=state.craftingWarnings.map(warning=>`<li>${E(warning)}</li>`).join('');
+  main.innerHTML=head('Crafting plans','Shared inventory, live recipe progress, and one combined gathering list.','<button class="small" data-action="export-inventory">Export inventory</button><button class="small text" data-action="reset-inventory">Reset local changes</button>','THE WORKBENCH')+
+    (warnings?`<div class="notice error" role="alert"><strong>Crafting data needs attention</strong><ul>${warnings}</ul></div>`:'')+
+    `<div class="crafting-overview"><div><strong>${recipes.length}</strong><span>${recipes.length===1?'recipe':'recipes'} planned</span></div><div><strong>${ready}</strong><span>ready to craft</span></div><div><strong>${fmt(missing.reduce((sum,row)=>sum+row.missing,0))}</strong><span>items still needed</span></div></div>
+    <div class="workbench-layout">
+      <section class="panel inventory-panel" aria-labelledby="inventory-heading"><div class="section-head"><div><h2 id="inventory-heading">My inventory</h2><small>Changes save only in this browser.</small></div><span class="badge good">Saved locally</span></div><div class="inventory-list">${items.map(inventoryEditor).join('')||'<p class="muted">Add inventory items in data.js.</p>'}</div></section>
+      <section class="panel shopping-panel" aria-labelledby="shopping-heading"><div class="section-head"><div><h2 id="shopping-heading">Still to gather</h2><small>Combined across every planned recipe.</small></div></div>${missing.length?`<div class="shopping-list">${missing.map(row=>`<div><span>${E(row.item)}</span><strong>${fmt(row.missing)} more</strong><small>${fmt(row.have)} owned · ${fmt(row.required)} total needed</small></div>`).join('')}</div>`:recipes.length?'<div class="all-ready"><span aria-hidden="true">✦</span><strong>Everything is ready.</strong><small>The workbench approves.</small></div>':'<p class="muted">Add a valid recipe to start a gathering list.</p>'}</section>
+    </div>
+    <div class="section-head crafting-heading"><div><h2>Recipes</h2><small>Each card reads from the shared inventory above.</small></div></div>
+    <div class="crafting-grid">${recipes.map(craftingCard).join('')||blank('No crafting plans yet','Add your first recipe to the crafting list in data.js.')}</div>`;
 }
 function renderCharacter(id) {
   const c=character(id);
@@ -124,7 +160,19 @@ document.addEventListener('click',event=>{
     if(!a?.image){toast('No image on this one.');return;}
     $('#lightbox img').src=a.image;$('#lightbox img').alt=a.title;
     $('#lightbox p').textContent=a.title+(a.credit?' · '+a.credit:'');$('#lightbox').showModal();
+  } else if(button.dataset.action==='inventory-adjust'){
+    setInventory(button.dataset.item,C.inventoryAmount(inventory,button.dataset.item)+Number(button.dataset.delta));
+  } else if(button.dataset.action==='reset-inventory'){
+    if(window.confirm('Reset this browser’s inventory to the amounts in data.js?')){inventory={...state.inventory};saveInventory();renderCrafting();toast('Inventory reset.');}
+  } else if(button.dataset.action==='export-inventory'){
+    const payload={format:'character-ledger-inventory',version:1,exportedAt:new Date().toISOString(),inventory};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)+'\n'],{type:'application/json'}));
+    const link=document.createElement('a');link.href=url;link.download='character-ledger-inventory.json';link.click();URL.revokeObjectURL(url);toast('Inventory exported.');
   }
+});
+document.addEventListener('change',event=>{
+  const input=event.target.closest('[data-inventory-item]');
+  if(input)setInventory(input.dataset.inventoryItem,input.value);
 });
 $('#lightbox .lightbox-close').onclick=()=>$('#lightbox').close();
 window.addEventListener('hashchange',()=>{filter={q:'',species:'',status:'',sort:location.hash==='#progress'?'progress':'name',rank:''};window.scrollTo(0,0);render();});
@@ -132,6 +180,7 @@ function freeze(value){Object.values(value).forEach(v=>{if(v&&typeof v==='object
 try {
   // Always reads data.js directly — never the old v0.01 browser-saved records.
   state=freeze(C.validate(window.CHARACTER_LEDGER_SEED));
+  inventory=loadInventory(state.inventory);
   render();
 } catch(error) {
   main.innerHTML=blank('Could not load the ledger','Something’s wrong with the data: '+error.message);
