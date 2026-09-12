@@ -37,16 +37,43 @@
     const amount = inventory && inventory[item];
     return Number.isFinite(amount) && amount >= 0 ? amount : 0;
   }
-  function craftingProgress(recipe, inventory={}) {
-    const required = recipe.requirements.reduce((sum,item) => sum + item.required, 0);
-    const have = recipe.requirements.reduce((sum,item) => sum + Math.min(inventoryAmount(inventory,item.item),item.required), 0);
+  function craftingProgress(recipe, inventory={}, quantity=1) {
+    const count=Number.isInteger(quantity)&&quantity>0?quantity:1;
+    const required = recipe.requirements.reduce((sum,item) => sum + item.required*count, 0);
+    const have = recipe.requirements.reduce((sum,item) => sum + Math.min(inventoryAmount(inventory,item.item),item.required*count), 0);
     const percentage = required ? Math.round((have / required) * 10000) / 100 : 0;
     return {required,have,percentage,complete:required > 0 && have >= required};
   }
-  function shoppingList(recipes, inventory={}) {
+  function normalizeCraftingPlan(recipes, input={}) {
+    const ids=recipes.map(recipe=>recipe.id),known=new Set(ids),source=input&&typeof input==='object'&&!Array.isArray(input)?input:{};
+    const requestedOrder=Array.isArray(source.order)?source.order.filter(id=>typeof id==='string'&&known.has(id)):[];
+    const order=[...new Set([...requestedOrder,...ids])];
+    const desired={};
+    for(const id of ids){const value=source.desired&&source.desired[id];desired[id]=Number.isInteger(value)&&value>=1&&value<=1000000?value:1;}
+    const currentGoalId=typeof source.currentGoalId==='string'&&known.has(source.currentGoalId)?source.currentGoalId:'';
+    return {order,desired,currentGoalId};
+  }
+  function planCrafting(recipes, inventory={}, inputPlan={}) {
+    const plan=normalizeCraftingPlan(recipes,inputPlan),byId=new Map(recipes.map(recipe=>[recipe.id,recipe]));
+    const remaining={...inventory};
+    const rows=plan.order.map((id,index)=>{
+      const recipe=byId.get(id),quantity=plan.desired[id];
+      const requirements=recipe.requirements.map(requirement=>{
+        const required=requirement.required*quantity,available=inventoryAmount(inventory,requirement.item),availableAfterPriority=inventoryAmount(remaining,requirement.item),allocated=Math.min(required,availableAfterPriority);
+        remaining[requirement.item]=availableAfterPriority-allocated;
+        return {item:requirement.item,perCraft:requirement.required,required,available,availableAfterPriority,allocated,missing:required-allocated};
+      });
+      const ready=requirements.every(requirement=>requirement.missing===0),independentlyReady=requirements.every(requirement=>requirement.available>=requirement.required);
+      const craftableCopies=Math.max(0,Math.min(...recipe.requirements.map(requirement=>Math.floor(inventoryAmount(inventory,requirement.item)/requirement.required))));
+      return {recipe,quantity,index,requirements,ready,independentlyReady,blocked:!ready&&independentlyReady,status:ready?'ready':independentlyReady?'blocked':'gathering',craftableCopies};
+    });
+    return {plan,rows,remainingInventory:remaining};
+  }
+  function shoppingList(recipes, inventory={}, desired={}) {
     const totals = new Map();
     for (const recipe of recipes) for (const requirement of recipe.requirements) {
-      totals.set(requirement.item,(totals.get(requirement.item)||0)+requirement.required);
+      const quantity=Number.isInteger(desired[recipe.id])&&desired[recipe.id]>0?desired[recipe.id]:1;
+      totals.set(requirement.item,(totals.get(requirement.item)||0)+requirement.required*quantity);
     }
     return [...totals].map(([item,required])=>{
       const have=inventoryAmount(inventory,item);
@@ -66,6 +93,27 @@
       inventory[item]=amount;
     }
     return inventory;
+  }
+  function validateWorkshopExport(input, recipes=[]) {
+    if(input&&input.format==='character-ledger-inventory'&&input.version===1)return {inventory:validateInventoryExport(input),plan:normalizeCraftingPlan(recipes,{}),history:[],legacy:true};
+    assert(input&&typeof input==='object'&&!Array.isArray(input),'The import must contain a JSON object.');
+    assert(input.format==='character-ledger-workshop'&&input.version===2,'This is not a supported Character Ledger workshop backup.');
+    const inventory=validateInventoryExport({format:'character-ledger-inventory',version:1,inventory:input.inventory});
+    const plan=normalizeCraftingPlan(recipes,input.plan);
+    assert(Array.isArray(input.history)&&input.history.length<=5000,'The workshop history is invalid or too large.');
+    const history=[],historyIds=new Set();
+    for(const record of input.history){
+      assert(record&&typeof record==='object'&&!Array.isArray(record),'Invalid crafting history record.');
+      assert(typeof record.id==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(record.id)&&!historyIds.has(record.id),'Invalid or duplicate crafting history ID.');
+      assert(typeof record.recipeId==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(record.recipeId),'Invalid history recipe ID.');
+      assert(typeof record.recipeName==='string'&&record.recipeName.trim()&&record.recipeName.length<=200,'Invalid history recipe name.');
+      assert(Number.isInteger(record.quantity)&&record.quantity>=1&&record.quantity<=1000000,'Invalid crafted quantity.');
+      assert(typeof record.craftedAt==='string'&&Number.isFinite(Date.parse(record.craftedAt)),'Invalid crafting history date.');
+      assert(typeof record.undone==='boolean','History undo state must be true or false.');
+      const consumed=validateInventoryExport({format:'character-ledger-inventory',version:1,inventory:record.consumed});
+      historyIds.add(record.id);history.push({id:record.id,recipeId:record.recipeId,recipeName:record.recipeName,quantity:record.quantity,craftedAt:record.craftedAt,consumed,undone:record.undone});
+    }
+    return {inventory,plan,history,legacy:false};
   }
   function safeURL(value, image=false) {
     if (!value) return true;
@@ -116,6 +164,8 @@
         assert(recipe&&typeof recipe==='object'&&!Array.isArray(recipe),'Invalid recipe record.');
         id(recipe.id);assert(!craftingIds.has(recipe.id),'Duplicate crafting recipe ID.');
         str(recipe.name,'recipe name',200);assert(recipe.name.trim(),'A recipe needs a name.');
+        for(const key of ['category','notes','reference'])if(recipe[key]===undefined)recipe[key]='';
+        str(recipe.category,'recipe category',100);str(recipe.notes,'recipe notes',2000);str(recipe.reference,'recipe reference',2000);assert(safeURL(recipe.reference),'Recipe reference must start with https:// or http://.');
         assert(Array.isArray(recipe.requirements)&&recipe.requirements.length>0&&recipe.requirements.length<=200,'A recipe needs 1–200 requirements.');
         const requirements=[],itemNames=new Set();
         for(const item of recipe.requirements){
@@ -126,7 +176,7 @@
           if(item.have!==undefined){num(item.have,'owned amount');legacyInventory[item.item]=Math.max(legacyInventory[item.item]||0,item.have);}
           requirements.push({item:item.item,required:item.required});
         }
-        craftingIds.add(recipe.id);crafting.push({id:recipe.id,name:recipe.name,requirements});
+        craftingIds.add(recipe.id);crafting.push({id:recipe.id,name:recipe.name,category:recipe.category,notes:recipe.notes,reference:recipe.reference,requirements});
       } catch(error) {
         const label=recipe&&typeof recipe.id==='string'&&recipe.id?recipe.id:'#'+(index+1);
         craftingWarnings.push('Recipe "'+label+'" was skipped: '+error.message);
@@ -150,6 +200,6 @@
     for(const [key,value] of Object.entries(d.redemptions)){assert(validKeys.has(key),'Redemption references a missing reward.');assert(value&&typeof value==='object','Invalid redemption.');str(value.date,'redemption date',40);assert(Number.isFinite(Date.parse(value.date)),'Invalid redemption date.');str(value.note,'redemption note',2000);}
     return {format:d.format,version:d.version,systems:d.systems,characters:d.characters,art:d.art,adjustments:d.adjustments,rewards:d.rewards,redemptions:d.redemptions,inventory,crafting,craftingWarnings};
   }
-  root.LedgerCore={totalXP,progress,rewardRows,inventoryAmount,craftingProgress,shoppingList,validateInventoryExport,validate,safeURL,copy};
+  root.LedgerCore={totalXP,progress,rewardRows,inventoryAmount,craftingProgress,normalizeCraftingPlan,planCrafting,shoppingList,validateInventoryExport,validateWorkshopExport,validate,safeURL,copy};
   if(typeof module!=='undefined')module.exports=root.LedgerCore;
 })(typeof window!=='undefined'?window:globalThis);

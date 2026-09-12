@@ -1,12 +1,13 @@
-/* Character Ledger v0.07.2 — workshop import, sync, and interaction polish. */
+/* Character Ledger v0.08 — priority planning, crafting, and undoable history. */
 (function(){
 'use strict';
 const C=window.LedgerCore, $=s=>document.querySelector(s), E=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>new Intl.NumberFormat(undefined,{maximumFractionDigits:2}).format(n);
 const selected=(a,b)=>a===b?' selected':'';
+const WORKSHOP_KEY='character-ledger-workshop-v2';
 const INVENTORY_KEY='character-ledger-inventory-v1';
 const INVENTORY_SAVED_KEY='character-ledger-inventory-saved-at-v1';
-let state,inventory={},inventorySavedAt='',craftingOnlyMissing=false,toastTimer,filter={q:'',species:'',status:'',sort:location.hash==='#progress'?'progress':'name',rank:''};
+let state,inventory={},inventorySavedAt='',craftingPlan={order:[],desired:{},currentGoalId:''},craftHistory=[],craftingOnlyMissing=false,craftingStatusFilter='',historyCounter=0,toastTimer,filter={q:'',species:'',status:'',sort:location.hash==='#progress'?'progress':'name',rank:''};
 const main=$('#main');
 function toast(text){$('#toast').textContent=text;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4500);}
 function character(id){return state.characters.find(c=>c.id===id);}
@@ -54,22 +55,27 @@ function withRecipeItems(values) {
   for(const recipe of state.crafting)for(const requirement of recipe.requirements)if(!(requirement.item in next))next[requirement.item]=0;
   return next;
 }
-function loadInventory(seed) {
-  let next={...seed};
+function loadWorkshop(seed) {
+  let next={inventory:{...seed},plan:C.normalizeCraftingPlan(state.crafting,{}),history:[]};
   try {
-    const raw=localStorage.getItem(INVENTORY_KEY);
-    if(raw){const saved=C.validateInventoryExport({format:'character-ledger-inventory',version:1,inventory:JSON.parse(raw)});next={...next,...saved};}
-    inventorySavedAt=localStorage.getItem(INVENTORY_SAVED_KEY)||'';
-  } catch(error) {console.warn('Could not load saved crafting inventory.',error);}
-  return withRecipeItems(next);
+    const workshopRaw=localStorage.getItem(WORKSHOP_KEY);
+    if(workshopRaw){
+      const parsed=JSON.parse(workshopRaw),saved=C.validateWorkshopExport(parsed,state.crafting);
+      next={inventory:saved.inventory,plan:saved.plan,history:saved.history};inventorySavedAt=typeof parsed.savedAt==='string'?parsed.savedAt:'';
+    } else {
+      const legacyRaw=localStorage.getItem(INVENTORY_KEY);
+      if(legacyRaw)next.inventory={...next.inventory,...C.validateInventoryExport({format:'character-ledger-inventory',version:1,inventory:JSON.parse(legacyRaw)})};
+      inventorySavedAt=localStorage.getItem(INVENTORY_SAVED_KEY)||'';
+    }
+  } catch(error) {console.warn('Could not load saved workshop data.',error);}
+  inventory=withRecipeItems(next.inventory);craftingPlan=C.normalizeCraftingPlan(state.crafting,next.plan);craftHistory=next.history;
 }
-function saveInventory() {
+function saveWorkshop() {
   try {
-    const savedAt=new Date().toISOString();localStorage.setItem(INVENTORY_KEY,JSON.stringify(inventory));inventorySavedAt=savedAt;
-    try {localStorage.setItem(INVENTORY_SAVED_KEY,savedAt);}catch(timestampError){console.warn('Inventory saved without a timestamp.',timestampError);}
+    const savedAt=new Date().toISOString();localStorage.setItem(WORKSHOP_KEY,JSON.stringify({format:'character-ledger-workshop',version:2,savedAt,inventory,plan:craftingPlan,history:craftHistory}));inventorySavedAt=savedAt;
     return true;
   }
-  catch(error){console.warn('Could not save crafting inventory.',error);toast('This browser could not save the inventory.');return false;}
+  catch(error){console.warn('Could not save workshop data.',error);toast('This browser could not save the workshop.');return false;}
 }
 function savedLabel() {
   if(!inventorySavedAt)return 'Using published defaults';
@@ -86,17 +92,17 @@ function setInventory(item,value,focusDelta='') {
   if(value===''||!Number.isFinite(amount)||amount<0||amount>1000000000||Math.abs(numeric*100-Math.round(numeric*100))>.0001){toast('Use an amount from 0 to 1,000,000,000 with up to two decimal places.');renderCrafting();return;}
   if(amount>1000000&&amount!==inventory[item]&&!window.confirm('That is an unusually large inventory amount. Save it anyway?')){renderCrafting();return;}
   const previous=inventory[item];inventory[item]=amount;
-  if(saveInventory())toast(item+' updated.');else inventory[item]=previous;
+  if(saveWorkshop())toast(item+' updated.');else inventory[item]=previous;
   renderCrafting();
   if(focusDelta)restoreInventoryFocus(item,focusDelta);
 }
-function inventoryEditor(item,recipes) {
+function inventoryEditor(item,planRows) {
   const amount=C.inventoryAmount(inventory,item);
-  const neededBy=recipes.filter(recipe=>recipe.requirements.some(requirement=>requirement.item===item));
-  const totalRequired=neededBy.reduce((sum,recipe)=>sum+recipe.requirements.find(requirement=>requirement.item===item).required,0);
+  const neededBy=planRows.filter(row=>row.requirements.some(requirement=>requirement.item===item));
+  const totalRequired=neededBy.reduce((sum,row)=>sum+row.requirements.find(requirement=>requirement.item===item).required,0);
   const missing=Math.max(0,totalRequired-amount);
   if(craftingOnlyMissing&&missing<=0)return '';
-  return `<div class="inventory-row"><div><strong>${E(item)}</strong><small>${neededBy.length?'Needed by: '+E(neededBy.map(recipe=>recipe.name).join(', ')):'Not used by a current recipe'}${totalRequired?` · ${fmt(missing)} missing`:''}</small></div><div class="quantity-control">
+  return `<div class="inventory-row"><div><strong>${E(item)}</strong><small>${neededBy.length?'Needed by: '+E(neededBy.map(row=>row.recipe.name+(row.quantity>1?' ×'+row.quantity:'')).join(', ')):'Not used by a current recipe'}${totalRequired?` · ${fmt(missing)} missing`:''}</small></div><div class="quantity-control">
     <button class="small" data-action="inventory-adjust" data-item="${E(item)}" data-delta="-1" aria-label="Remove one ${E(item)}">−</button>
     <label><span class="sr-only">${E(item)} owned</span><input type="number" min="0" max="1000000000" step="0.01" value="${amount}" data-inventory-item="${E(item)}"></label>
     <button class="small" data-action="inventory-adjust" data-item="${E(item)}" data-delta="1" aria-label="Add one ${E(item)}">+</button>
@@ -105,33 +111,79 @@ function inventoryEditor(item,recipes) {
 function craftingMeter(recipe,p) {
   return `<div class="meter crafting-meter" role="progressbar" aria-label="${E(recipe.name)} crafting progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p.percentage)}"><span style="width:${p.percentage}%"></span></div>`;
 }
-function craftingCard(recipe) {
-  const p=C.craftingProgress(recipe,inventory);
-  return `<article class="panel crafting-card">
-    <div class="crafting-card-head"><div><span class="badge ${p.complete?'good':'purple'}">${p.complete?'Ready to craft':'Gathering items'}</span><h2>${E(recipe.name)}</h2></div><strong>${fmt(p.percentage)}%</strong></div>
-    ${craftingMeter(recipe,p)}
-    <div class="crafting-summary"><span>${fmt(p.have)} of ${fmt(p.required)} total items ready</span><span>${recipe.requirements.filter(item=>C.inventoryAmount(inventory,item.item)>=item.required).length} of ${recipe.requirements.length} requirements complete</span></div>
-    <div class="crafting-items" role="list" aria-label="Requirements for ${E(recipe.name)}">
-      ${recipe.requirements.map(item=>{const have=C.inventoryAmount(inventory,item.item),done=have>=item.required;return `<div class="crafting-item ${done?'complete':''}" role="listitem"><span class="crafting-check" aria-hidden="true">${done?'✓':'○'}</span><span>${E(item.item)}</span><strong>${fmt(have)} / ${fmt(item.required)}</strong></div>`;}).join('')}
+function craftingCard(row,totalRows) {
+  const required=row.requirements.reduce((sum,item)=>sum+item.required,0),allocated=row.requirements.reduce((sum,item)=>sum+item.allocated,0),percentage=required?Math.round(allocated/required*10000)/100:0;
+  const p={percentage},goal=craftingPlan.currentGoalId===row.recipe.id;
+  const status={ready:['good','Ready to forge'],blocked:['pending','Reserved above'],gathering:['purple','Gathering items']}[row.status];
+  return `<article class="panel crafting-card ${goal?'current-goal':''}">
+    <div class="crafting-card-head"><div><div class="tags"><span class="badge ${status[0]}">${status[1]}</span>${goal?'<span class="badge good">★ Current goal</span>':''}${row.recipe.category?`<span class="badge">${E(row.recipe.category)}</span>`:''}</div><h2>${E(row.recipe.name)}</h2></div><strong>${fmt(percentage)}%</strong></div>
+    ${row.recipe.notes?`<p class="notes inline-help">${E(row.recipe.notes)}</p>`:''}${row.recipe.reference?`<p><a href="${E(row.recipe.reference)}" target="_blank" rel="noopener noreferrer">Recipe reference ↗</a></p>`:''}
+    ${craftingMeter(row.recipe,p)}
+    <div class="crafting-summary"><span>${fmt(allocated)} of ${fmt(required)} items reserved</span><span>${row.craftableCopies} ${row.craftableCopies===1?'copy':'copies'} craftable from raw inventory</span></div>
+    <div class="crafting-items" role="list" aria-label="Requirements for ${E(row.recipe.name)}">
+      ${row.requirements.map(item=>{const done=item.allocated>=item.required;return `<div class="crafting-item ${done?'complete':''}" role="listitem"><span class="crafting-check" aria-hidden="true">${done?'✓':'○'}</span><span>${E(item.item)}${row.quantity>1?` <small>(${fmt(item.perCraft)} each)</small>`:''}</span><strong>${fmt(item.allocated)} / ${fmt(item.required)}</strong></div>`;}).join('')}
     </div>
+    <div class="recipe-plan-controls"><div><span class="muted">Priority ${row.index+1}</span><div class="priority-actions"><button class="small" data-action="recipe-move" data-id="${row.recipe.id}" data-direction="-1" aria-label="Move ${E(row.recipe.name)} earlier"${row.index===0?' disabled':''}>↑</button><button class="small" data-action="recipe-move" data-id="${row.recipe.id}" data-direction="1" aria-label="Move ${E(row.recipe.name)} later"${row.index===totalRows-1?' disabled':''}>↓</button><button class="small text" data-action="recipe-goal" data-id="${row.recipe.id}">${goal?'Unpin goal':'Make current goal'}</button></div></div><label>Planned quantity<input type="number" min="1" max="1000000" step="1" value="${row.quantity}" data-plan-quantity="${row.recipe.id}"></label></div>
+    <button class="primary craft-button" data-action="craft-recipe" data-id="${row.recipe.id}"${row.ready?'':' disabled'}>Craft ${fmt(row.quantity)} ${E(row.recipe.name)}</button>
   </article>`;
 }
+function historyCard(record) {
+  const consumed=Object.entries(record.consumed).map(([item,amount])=>`${fmt(amount)} ${E(item)}`).join(' · ');
+  return `<article class="craft-history-row ${record.undone?'undone':''}"><div><span class="badge ${record.undone?'':'good'}">${record.undone?'Undone':'Crafted'}</span><h3>${fmt(record.quantity)} × ${E(record.recipeName)}</h3><small>${E(new Date(record.craftedAt).toLocaleString())}</small><p>${consumed}</p></div>${record.undone?'':`<button class="small" data-action="undo-craft" data-id="${record.id}">Undo</button>`}</article>`;
+}
+function updateCraftingPlan(next,message='Crafting plan updated.') {
+  const previous=craftingPlan;craftingPlan=C.normalizeCraftingPlan(state.crafting,next);
+  if(saveWorkshop())toast(message);else craftingPlan=previous;
+  renderCrafting();
+}
+function moveRecipe(id,direction) {
+  const order=[...craftingPlan.order],index=order.indexOf(id),target=index+direction;if(index<0||target<0||target>=order.length)return;
+  [order[index],order[target]]=[order[target],order[index]];updateCraftingPlan({...craftingPlan,order},'Recipe priority updated.');
+}
+function setDesiredQuantity(id,value) {
+  const amount=Number(value);
+  if(!Number.isInteger(amount)||amount<1||amount>1000000){toast('Planned quantity must be a whole number from 1 to 1,000,000.');renderCrafting();return;}
+  updateCraftingPlan({...craftingPlan,desired:{...craftingPlan.desired,[id]:amount}},'Planned quantity updated.');
+}
+function craftRecipe(id) {
+  const row=C.planCrafting(state.crafting,inventory,craftingPlan).rows.find(entry=>entry.recipe.id===id);
+  if(!row?.ready){toast('That recipe is not ready at its current priority.');renderCrafting();return;}
+  const consumed=Object.fromEntries(row.requirements.map(item=>[item.item,item.required]));
+  const summary=Object.entries(consumed).map(([item,amount])=>fmt(amount)+' '+item).join(', ');
+  if(!window.confirm(`Craft ${row.quantity} × ${row.recipe.name}? This will consume ${summary}.`))return;
+  const previousInventory={...inventory},previousHistory=craftHistory;
+  for(const [item,amount] of Object.entries(consumed))inventory[item]=Math.round((C.inventoryAmount(inventory,item)-amount)*100)/100;
+  historyCounter+=1;craftHistory=[{id:'craft-'+Date.now().toString(36)+'-'+historyCounter.toString(36),recipeId:row.recipe.id,recipeName:row.recipe.name,quantity:row.quantity,craftedAt:new Date().toISOString(),consumed,undone:false},...craftHistory];
+  if(saveWorkshop()){renderCrafting();main.classList.add('forge-celebrate');setTimeout(()=>main.classList.remove('forge-celebrate'),900);toast(row.recipe.name+' crafted. ✦');}else{inventory=previousInventory;craftHistory=previousHistory;renderCrafting();}
+}
+function undoCraft(id) {
+  const index=craftHistory.findIndex(record=>record.id===id&&!record.undone);if(index<0)return;
+  const previousInventory={...inventory},previousHistory=craftHistory;
+  const record=craftHistory[index];
+  if(Object.entries(record.consumed).some(([item,amount])=>C.inventoryAmount(inventory,item)+amount>1000000000)){toast('Undo would exceed the maximum inventory amount. Reduce that item first.');return;}
+  for(const [item,amount] of Object.entries(record.consumed))inventory[item]=Math.round((C.inventoryAmount(inventory,item)+amount)*100)/100;
+  craftHistory=craftHistory.map((entry,entryIndex)=>entryIndex===index?{...entry,undone:true}:entry);
+  if(saveWorkshop()){renderCrafting();toast('Craft undone; materials restored.');}else{inventory=previousInventory;craftHistory=previousHistory;renderCrafting();}
+}
 function renderCrafting() {
-  const recipes=[...state.crafting].sort((a,b)=>C.craftingProgress(a,inventory).complete-C.craftingProgress(b,inventory).complete||a.name.localeCompare(b.name));
-  const ready=recipes.filter(recipe=>C.craftingProgress(recipe,inventory).complete).length;
+  const planned=C.planCrafting(state.crafting,inventory,craftingPlan);craftingPlan=planned.plan;
+  const rows=planned.rows,recipes=rows.map(row=>row.recipe),visibleRows=craftingStatusFilter?rows.filter(row=>row.status===craftingStatusFilter):rows;
+  const ready=rows.filter(row=>row.ready).length;
   const items=[...new Set([...Object.keys(inventory),...recipes.flatMap(recipe=>recipe.requirements.map(item=>item.item))])].sort((a,b)=>a.localeCompare(b));
-  const missing=C.shoppingList(recipes,inventory);
+  const missing=C.shoppingList(recipes,inventory,craftingPlan.desired);
   const warnings=state.craftingWarnings.map(warning=>`<li>${E(warning)}</li>`).join('');
-  const inventoryRows=items.map(item=>inventoryEditor(item,recipes)).join('');
-  main.innerHTML=head('Crafting plans','Shared inventory, live recipe progress, and one combined gathering list.','<button class="small" data-action="import-inventory">Import inventory</button><button class="small" data-action="export-inventory">Export inventory</button><button class="small text" data-action="reset-inventory">Reset local changes</button>','THE WORKBENCH')+
+  const inventoryRows=items.map(item=>inventoryEditor(item,rows)).join('');
+  main.innerHTML=head('The Forge','Prioritize plans, reserve shared materials, and record what gets made.','<button class="small" data-action="import-inventory">Import backup</button><button class="small" data-action="export-inventory">Export backup</button><button class="small text" data-action="reset-inventory">Reset local workshop</button>','THE WORKBENCH')+
     (warnings?`<div class="notice error" role="alert"><strong>Crafting data needs attention</strong><ul>${warnings}</ul></div>`:'')+
-    `<div class="crafting-overview"><div><strong>${recipes.length}</strong><span>${recipes.length===1?'recipe':'recipes'} planned</span></div><div><strong>${ready}</strong><span>ready to craft</span></div><div><strong>${fmt(missing.reduce((sum,row)=>sum+row.missing,0))}</strong><span>items still needed</span></div></div>
+    `<div class="crafting-overview"><div><strong>${recipes.length}</strong><span>${recipes.length===1?'recipe':'recipes'} planned</span></div><div><strong>${ready}</strong><span>ready at current priority</span></div><div><strong>${fmt(missing.reduce((sum,row)=>sum+row.missing,0))}</strong><span>items still needed</span></div><div><strong>${craftHistory.filter(record=>!record.undone).length}</strong><span>crafts recorded</span></div></div>
     <div class="workbench-layout">
       <section class="panel inventory-panel" aria-labelledby="inventory-heading"><div class="section-head"><div><h2 id="inventory-heading">My inventory</h2><small id="inventory-save-status" aria-live="polite">${E(savedLabel())}</small></div><label class="missing-toggle"><input type="checkbox" data-crafting-missing${craftingOnlyMissing?' checked':''}> Only show missing</label></div><div class="inventory-list">${inventoryRows||(craftingOnlyMissing?'<p class="muted">Nothing is missing from the current recipes.</p>':'<p class="muted">Add inventory items in data.js.</p>')}</div></section>
-      <section class="panel shopping-panel" aria-labelledby="shopping-heading"><div class="section-head"><div><h2 id="shopping-heading">Still to gather</h2><small>Combined across every planned recipe.</small></div></div>${missing.length?`<div class="shopping-list">${missing.map(row=>`<div><span>${E(row.item)}</span><strong>${fmt(row.missing)} more</strong><small>${fmt(row.have)} owned · ${fmt(row.required)} total needed</small></div>`).join('')}</div>`:recipes.length?'<div class="all-ready"><span aria-hidden="true">✦</span><strong>Everything is ready.</strong><small>The workbench approves.</small></div>':'<p class="muted">Add a valid recipe to start a gathering list.</p>'}</section>
+      <section class="panel shopping-panel" aria-labelledby="shopping-heading"><div class="section-head"><div><h2 id="shopping-heading">Still to gather</h2><small>Combined across planned quantities.</small></div></div>${missing.length?`<div class="shopping-list">${missing.map(row=>`<div><span>${E(row.item)}</span><strong>${fmt(row.missing)} more</strong><small>${fmt(row.have)} owned · ${fmt(row.required)} planned</small></div>`).join('')}</div>`:recipes.length?'<div class="all-ready"><span aria-hidden="true">✦</span><strong>Everything is ready.</strong><small>The forge awaits.</small></div>':'<p class="muted">Add a valid recipe to start a gathering list.</p>'}</section>
     </div>
-    <div class="section-head crafting-heading"><div><h2>Recipes</h2><small>Each card reads from the shared inventory above.</small></div></div>
-    <div class="crafting-grid">${recipes.map(craftingCard).join('')||blank('No crafting plans yet','Add your first recipe to the crafting list in data.js.')}</div>`;
+    <div class="section-head crafting-heading"><div><h2>Priority queue</h2><small>Higher recipes reserve materials before lower recipes.</small></div><label>Show<select data-crafting-status><option value="">All plans</option><option value="ready"${selected(craftingStatusFilter,'ready')}>Ready</option><option value="gathering"${selected(craftingStatusFilter,'gathering')}>Gathering</option><option value="blocked"${selected(craftingStatusFilter,'blocked')}>Blocked by priority</option></select></label></div>
+    <div class="crafting-grid">${visibleRows.map(row=>craftingCard(row,rows.length)).join('')||blank(rows.length?'No plans match this filter':'No crafting plans yet',rows.length?'Choose another status.':'Add your first recipe to the crafting list in data.js.')}</div>
+    <div class="section-head history-heading"><div><h2>Crafting history</h2><small>Undo restores the exact materials consumed.</small></div></div>
+    <div class="craft-history">${craftHistory.map(historyCard).join('')||blank('Nothing forged yet','Completed crafts will appear here with an undo option.')}</div>`;
 }
 function renderCharacter(id) {
   const c=character(id);
@@ -192,58 +244,79 @@ document.addEventListener('click',event=>{
   } else if(button.dataset.action==='inventory-adjust'){
     setInventory(button.dataset.item,C.inventoryAmount(inventory,button.dataset.item)+Number(button.dataset.delta),button.dataset.delta);
   } else if(button.dataset.action==='reset-inventory'){
-    if(window.confirm('Reset this browser’s inventory to the amounts in data.js?')){
-      try {localStorage.removeItem(INVENTORY_KEY);localStorage.removeItem(INVENTORY_SAVED_KEY);}catch(error){console.warn('Could not clear saved crafting inventory.',error);}
-      inventory=withRecipeItems(state.inventory);inventorySavedAt='';renderCrafting();toast('Inventory reset to published defaults.');
+    if(window.confirm('Reset this browser’s inventory, recipe plan, and crafting history?')){
+      try {localStorage.removeItem(WORKSHOP_KEY);localStorage.removeItem(INVENTORY_KEY);localStorage.removeItem(INVENTORY_SAVED_KEY);}catch(error){console.warn('Could not clear saved workshop data.',error);}
+      inventory=withRecipeItems(state.inventory);craftingPlan=C.normalizeCraftingPlan(state.crafting,{});craftHistory=[];inventorySavedAt='';renderCrafting();toast('Workshop reset to published defaults.');
     }
   } else if(button.dataset.action==='import-inventory'){
     $('#inventory-import-error').textContent='';$('#inventory-import-file').value='';$('#inventory-import-dialog').showModal();
   } else if(button.dataset.action==='close-inventory-import'){
     $('#inventory-import-dialog').close();
   } else if(button.dataset.action==='export-inventory'){
-    const payload={format:'character-ledger-inventory',version:1,exportedAt:new Date().toISOString(),inventory};
+    const payload={format:'character-ledger-workshop',version:2,exportedAt:new Date().toISOString(),inventory,plan:craftingPlan,history:craftHistory};
     const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)+'\n'],{type:'application/json'}));
-    const link=document.createElement('a');link.href=url;link.download='character-ledger-inventory.json';link.click();URL.revokeObjectURL(url);toast('Inventory exported.');
+    const link=document.createElement('a');link.href=url;link.download='character-ledger-workshop.json';link.click();URL.revokeObjectURL(url);toast('Workshop backup exported.');
+  } else if(button.dataset.action==='recipe-move'){
+    moveRecipe(button.dataset.id,Number(button.dataset.direction));
+  } else if(button.dataset.action==='recipe-goal'){
+    const id=button.dataset.id,on=craftingPlan.currentGoalId!==id;
+    updateCraftingPlan({...craftingPlan,currentGoalId:on?id:'',order:on?[id,...craftingPlan.order.filter(recipeId=>recipeId!==id)]:craftingPlan.order},on?'Current goal pinned.':'Current goal unpinned.');
+  } else if(button.dataset.action==='craft-recipe'){
+    craftRecipe(button.dataset.id);
+  } else if(button.dataset.action==='undo-craft'){
+    undoCraft(button.dataset.id);
   }
 });
 document.addEventListener('change',event=>{
   const input=event.target.closest('[data-inventory-item]');
   const missingToggle=event.target.closest('[data-crafting-missing]');
+  const planQuantity=event.target.closest('[data-plan-quantity]');
+  const statusFilter=event.target.closest('[data-crafting-status]');
   if(input)setInventory(input.dataset.inventoryItem,input.value);
   else if(missingToggle){craftingOnlyMissing=missingToggle.checked;renderCrafting();}
+  else if(planQuantity)setDesiredQuantity(planQuantity.dataset.planQuantity,planQuantity.value);
+  else if(statusFilter){craftingStatusFilter=statusFilter.value;renderCrafting();}
 });
 $('#inventory-import-form').addEventListener('submit',async event=>{
   event.preventDefault();
   const error=$('#inventory-import-error'),file=$('#inventory-import-file').files?.[0];error.textContent='';
   try {
     if(!file)throw new Error('Choose an inventory JSON file first.');
-    if(file.size>1000000)throw new Error('That file is too large. Inventory exports must be under 1 MB.');
+    if(file.size>5000000)throw new Error('That file is too large. Workshop backups must be under 5 MB.');
     let payload;
     try {payload=JSON.parse(await file.text());}catch(parseError){throw new Error('That file is not valid JSON.');}
-    const imported=C.validateInventoryExport(payload);
+    const imported=C.validateWorkshopExport(payload,state.crafting);
     const mode=document.querySelector('input[name="inventory-import-mode"]:checked')?.value||'merge';
-    const previous=inventory;
-    inventory=withRecipeItems(mode==='replace'?imported:{...inventory,...imported});
-    if(!saveInventory()){inventory=previous;throw new Error('The inventory was valid, but this browser could not save it.');}
-    $('#inventory-import-dialog').close();renderCrafting();toast(Object.keys(imported).length+' inventory items imported.');
+    const previous={inventory,craftingPlan,craftHistory};
+    if(mode==='replace'){
+      inventory=withRecipeItems(imported.inventory);craftingPlan=imported.plan;craftHistory=imported.history;
+    } else {
+      inventory=withRecipeItems({...inventory,...imported.inventory});
+      if(!imported.legacy){
+        craftingPlan=C.normalizeCraftingPlan(state.crafting,{order:[...imported.plan.order,...craftingPlan.order],desired:{...craftingPlan.desired,...imported.plan.desired},currentGoalId:imported.plan.currentGoalId||craftingPlan.currentGoalId});
+        const importedIds=new Set(imported.history.map(record=>record.id));craftHistory=[...imported.history,...craftHistory.filter(record=>!importedIds.has(record.id))].sort((a,b)=>Date.parse(b.craftedAt)-Date.parse(a.craftedAt));
+      }
+    }
+    if(!saveWorkshop()){inventory=previous.inventory;craftingPlan=previous.craftingPlan;craftHistory=previous.craftHistory;throw new Error('The backup was valid, but this browser could not save it.');}
+    $('#inventory-import-dialog').close();renderCrafting();toast((imported.legacy?'Legacy inventory':'Workshop backup')+' imported.');
   } catch(importError) {error.textContent=importError.message;}
 });
 $('#lightbox .lightbox-close').onclick=()=>$('#lightbox').close();
 window.addEventListener('hashchange',()=>{filter={q:'',species:'',status:'',sort:location.hash==='#progress'?'progress':'name',rank:''};window.scrollTo(0,0);render();});
 window.addEventListener('storage',event=>{
-  if(!state||event.key!==INVENTORY_KEY)return;
+  if(!state||event.key!==WORKSHOP_KEY)return;
   try {
-    const synced=event.newValue===null?state.inventory:C.validateInventoryExport({format:'character-ledger-inventory',version:1,inventory:JSON.parse(event.newValue)});
-    inventory=withRecipeItems(synced);inventorySavedAt=event.newValue===null?'':localStorage.getItem(INVENTORY_SAVED_KEY)||new Date().toISOString();
+    const parsed=event.newValue===null?null:JSON.parse(event.newValue),synced=parsed?C.validateWorkshopExport(parsed,state.crafting):{inventory:state.inventory,plan:C.normalizeCraftingPlan(state.crafting,{}),history:[]};
+    inventory=withRecipeItems(synced.inventory);craftingPlan=synced.plan;craftHistory=synced.history;inventorySavedAt=parsed&&typeof parsed.savedAt==='string'?parsed.savedAt:'';
     if((location.hash.slice(1)||'characters').split('/')[0]==='crafting')renderCrafting();
-    toast('Inventory synced from another tab.');
-  } catch(error) {console.warn('Ignored invalid inventory from another tab.',error);}
+    toast('Workshop synced from another tab.');
+  } catch(error) {console.warn('Ignored invalid workshop data from another tab.',error);}
 });
 function freeze(value){Object.values(value).forEach(v=>{if(v&&typeof v==='object')freeze(v);});return Object.freeze(value);}
 try {
   // Always reads data.js directly — never the old v0.01 browser-saved records.
   state=freeze(C.validate(window.CHARACTER_LEDGER_SEED));
-  inventory=loadInventory(state.inventory);
+  loadWorkshop(state.inventory);
   render();
 } catch(error) {
   main.innerHTML=blank('Could not load the ledger','Something’s wrong with the data: '+error.message);

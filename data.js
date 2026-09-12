@@ -1,4 +1,4 @@
-/* OWNER-EDITED SITE DATA — v0.07.2
+/* OWNER-EDITED SITE DATA — v0.08
    Edit this file in GitHub or a text editor, then commit it to the repository.
    This is the only source of character records. Visitors cannot submit edits.
    See README.txt for copy/paste examples for characters, artwork, and rewards.
@@ -258,6 +258,9 @@ window.CHARACTER_LEDGER_SEED = {
     {
       id: 'spear',
       name: 'Spear',
+      category: 'Weapons',
+      notes: '',
+      reference: '',
       requirements: [
         {item: 'Stick', required: 20},
         {item: 'Thread', required: 5},

@@ -1,9 +1,9 @@
 # Character Ledger
 
 Finch's character, artwork, progression, reward, and crafting tracker. Published
-records remain read-only; crafting inventory can be adjusted and saved locally
-in each browser. Inventory exports can be safely merged or restored, and open
-tabs stay in sync.
+records remain read-only; the browser-local Forge supports shared inventory,
+priority planning, desired quantities, craft consumption, undoable history, and
+portable workshop backups.
 The site is plain HTML, CSS, and JavaScript with no build step or database.
 
 ## Deploy on Vercel

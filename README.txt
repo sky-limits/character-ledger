@@ -1,4 +1,51 @@
-CHARACTER LEDGER v0.07.2 — WORKSHOP POLISH
+CHARACTER LEDGER v0.08 — THE FORGE
+
+WHAT CHANGED
+- Recipes form a priority queue. Higher recipes reserve shared materials before
+  lower recipes, so one stack of items no longer makes every plan look ready.
+- Pinning a current goal moves it to the top; arrow buttons adjust the rest of
+  the order.
+- Planned quantity multiplies every requirement and the combined gathering
+  list.
+- Ready plans can be crafted after a consumption summary and confirmation.
+- Crafting subtracts the exact materials and creates a dated history record.
+- Undo restores those exact materials and marks the record as undone.
+- Recipe cards show Ready to forge, Gathering items, or Reserved above.
+- Backups now include inventory, priority, quantities, current goal, and
+  crafting history. v0.07 inventory-only exports still import safely.
+- Optional category, notes, and reference fields are supported on recipes.
+- A small completion sparkle respects reduced-motion preferences.
+
+PRIORITY AND CRAFTING
+The first recipe reserves what it needs, even while it is still gathering.
+Every lower recipe is calculated from what remains. “Reserved above” means the
+raw inventory could make that recipe, but an earlier plan is using those items.
+Move the recipe earlier if it should win the conflict.
+
+Crafting always uses the current planned quantity. The confirmation lists every
+material that will be consumed. Undo is local to this browser and can be used
+once per history record. It will stop safely rather than push any restored item
+over the maximum supported inventory amount.
+
+RECIPE DETAILS
+Optional fields can be added before requirements:
+  {
+    id: 'healing-potion',
+    name: 'Healing potion',
+    category: 'Potions',
+    notes: 'Keep one ready for expeditions.',
+    reference: 'https://example.com/recipe',
+    requirements: [
+      {item: 'Bilberries', required: 5},
+      {item: 'Thread', required: 1}
+    ]
+  }
+
+reference must be blank or begin with https:// or http://. Category and notes
+can be blank. Priority, planned quantity, goal, and history are browser-local;
+they do not belong in data.js.
+
+CHARACTER LEDGER v0.07.2 — PREVIOUS UPDATE NOTES
 
 WHAT CHANGED
 - Exported inventory JSON files can now be imported with Merge or Replace.

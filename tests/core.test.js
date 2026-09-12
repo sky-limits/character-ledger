@@ -51,4 +51,30 @@ assert.throws(()=>Core.validateInventoryExport({
   format:'character-ledger-inventory',version:1,inventory:{constructor:1}
 }),/reserved/,'Reserved object keys should be rejected.');
 
+const conflictRecipes=[
+  {id:'first',name:'First',category:'',notes:'',reference:'',requirements:[{item:'Thread',required:5}]},
+  {id:'second',name:'Second',category:'',notes:'',reference:'',requirements:[{item:'Thread',required:2}]}
+];
+const priority=Core.planCrafting(conflictRecipes,{Thread:5},{order:['first','second'],desired:{first:1,second:1}});
+assert.equal(priority.rows[0].status,'ready');
+assert.equal(priority.rows[1].status,'blocked','A lower recipe should report stock reserved by a higher-priority recipe.');
+assert.equal(priority.rows[1].craftableCopies,2,'Raw craftable count should remain visible when priority blocks a recipe.');
+const multiplied=Core.planCrafting(conflictRecipes,{Thread:12},{order:['first','second'],desired:{first:2,second:1},currentGoalId:'first'});
+assert.equal(multiplied.rows[0].requirements[0].required,10,'Desired quantities should multiply requirements.');
+assert.equal(multiplied.rows[1].status,'ready');
+assert.deepEqual(Core.shoppingList(conflictRecipes,{Thread:5},{first:2,second:1}).map(row=>[row.item,row.missing]),[['Thread',7]]);
+
+const workshopBackup={
+  format:'character-ledger-workshop',version:2,
+  inventory:{Stick:4,Thread:2},
+  plan:{order:['spear'],desired:{spear:2},currentGoalId:'spear'},
+  history:[{id:'craft-test-1',recipeId:'spear',recipeName:'Spear',quantity:1,craftedAt:'2026-09-12T10:00:00.000Z',consumed:{Stick:20,Thread:5,Arrowhead:2},undone:false}]
+};
+const restoredWorkshop=Core.validateWorkshopExport(workshopBackup,state.crafting);
+assert.equal(restoredWorkshop.plan.desired.spear,2);
+assert.equal(restoredWorkshop.history.length,1);
+assert.throws(()=>Core.validateWorkshopExport({...workshopBackup,history:[...workshopBackup.history,...workshopBackup.history]},state.crafting),/duplicate crafting history ID/);
+const legacyWorkshop=Core.validateWorkshopExport({format:'character-ledger-inventory',version:1,inventory:{Stick:3}},state.crafting);
+assert.equal(legacyWorkshop.legacy,true,'v0.07 inventory exports should remain importable.');
+
 console.log('Character Ledger core tests passed.');
