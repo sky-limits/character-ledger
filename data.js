@@ -263,13 +263,14 @@ window.CHARACTER_LEDGER_SEED = {
   // these numbers in this browser; edit these defaults to change them for
   // everyone on the next deployment.
   inventory: {
-    Stick: 1,
+    Stick: 11,
     Thread: 1,
-    Arrowhead: 0,
+    Arrowhead: 1,
     Bilberries: 1,
-    Pumpkin: 7,
+    Pumpkin: 8,
     Map: 6,
-    Leather: 2
+    Leather: 2,
+   Leaves: 20
   },
 
   crafting: [
