@@ -1,17 +1,17 @@
-/* OWNER-EDITED SITE DATA — v0.09
+/* OWNER-EDITED SITE DATA — v1.00
    Edit this file in GitHub or a text editor, then commit it to the repository.
    This is the only source of character records. Visitors cannot submit edits.
    See README.txt for copy/paste examples for characters, artwork, and rewards.
    Git keeps earlier versions, but local backups are still wise. Do not put secrets in public files. */
 window.CHARACTER_LEDGER_SEED = {
   format: 'character-ledger', version: 1,
-  systems: [{id:'aedraco', name:'Aedraco', xpName:'GP', levelName:'Rank', baseName:'Below Guardian', ranks:[
+  systems: [{id:'aedraco', name:'Aedraco', xpName:'GP', levelName:'Rank', baseName:'Below Guardian', pointMode:'cumulative', ranks:[
     {id:'guardian',name:'Guardian',threshold:250,reward:''},
     {id:'ancient',name:'Ancient',threshold:750,reward:''}
   ]},
   {
     id: 'kuda-pariso', name: 'Kuda Pariso',
-    xpName: 'KudaPoints', levelName: 'Tier', baseName: 'Green Kuda',
+    xpName: 'KudaPoints', levelName: 'Tier', baseName: 'Green Kuda', pointMode: 'cumulative',
     ranks: [
       {id: 'Rookie-Kuda', name: 'Rookie Kuda', threshold: 40, reward: ''},
       {id: 'Elite-Kuda', name: 'Elite Kuda', threshold: 80, reward: ''},

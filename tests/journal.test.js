@@ -32,7 +32,9 @@ const main=elements.get('#main');
 assert.match(main.innerHTML,/The Field Journal/);
 assert.match(main.innerHTML,/Next goals/);
 assert.match(main.innerHTML,/Pending review/);
-assert.match(main.innerHTML,/Point health/);
+assert.match(main.innerHTML,/Data health/);
+assert.match(main.innerHTML,/Schema v1 validated/);
+assert.match(main.innerHTML,/Cumulative progress/);
 assert.match(main.innerHTML,/Artwork scoring calculator/);
 assert.match(main.innerHTML,/136 GP to Guardian/);
 assert.match(main.innerHTML,/About 20 artworks/);
@@ -56,5 +58,12 @@ listeners.input({target:eventTarget('[data-score-field]',{dataset:{scoreField:'m
 assert.equal(elements.get('#score-total').textContent,'12');
 assert.equal(elements.get('#score-unit').textContent,'KudaPoints');
 assert.match(elements.get('#score-output').value,/characterId: "isolde"/);
+
+const failedImage={tagName:'IMG',dataset:{ledgerImageId:'nerissa-ref'},currentSrc:'images/missing.png',src:'images/missing.png',classList:{add(name){this.added=name;}}};
+listeners.error({target:failedImage});
+assert.equal(failedImage.dataset.fallback,'true');
+assert.match(failedImage.src,/^data:image\/svg\+xml/);
+sandbox.location.hash='#journal';windowListeners.hashchange();
+assert.match(main.innerHTML,/Image failed to load for nerissa-ref/,'Runtime image failures should appear in data health.');
 
 console.log('Character Ledger Field Journal tests passed.');

@@ -1,3 +1,30 @@
+CHARACTER LEDGER v1.00 — STABLE RELEASE
+
+WHAT CHANGED
+- The data contract is now stable at format character-ledger, schema version 1.
+- GP and KudaPoints are explicitly cumulative lifetime progress. Rewards and
+  crafting never subtract rank points; spendable items belong in inventory.
+- Validation errors now identify the exact species, character, artwork,
+  adjustment, reward, recipe, or scoring preset that needs attention.
+- Field Journal data health includes a validated record/image/link summary and
+  reports images that fail while browsing.
+- Broken artwork displays a calm fallback instead of a shattered image icon.
+- The fatal-error page explains recovery and links to OWNER-GUIDE.md.
+- High-contrast, forced-color, keyboard, live-region, and mobile behavior had a
+  final stable-release pass.
+- GitHub Actions runs syntax, core, Forge, Field Journal, local-image, cache,
+  schema, and release checks on every push and pull request.
+- CHANGELOG.md and OWNER-GUIDE.md now document releases and safe editing.
+
+STABLE VERSIONING
+The site release is v1.00. The data object remains version: 1; that is its
+schema version, not a decimal release number. Existing v0.09 data works without
+migration. Compatible fields may be added during v1.x, but existing schema-v1
+fields will not be removed or reinterpreted without a documented migration.
+
+For routine editing, start with OWNER-GUIDE.md. The historical instructions and
+examples remain below.
+
 CHARACTER LEDGER v0.09 — THE FIELD JOURNAL
 
 WHAT CHANGED

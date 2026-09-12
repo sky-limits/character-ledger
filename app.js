@@ -1,4 +1,4 @@
-/* Character Ledger v0.09 — character goals, point history, and scoring tools. */
+/* Character Ledger v1.00 — stable character, point, reward, and crafting tracker. */
 (function(){
 'use strict';
 const C=window.LedgerCore, $=s=>document.querySelector(s), E=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -7,13 +7,14 @@ const selected=(a,b)=>a===b?' selected':'';
 const WORKSHOP_KEY='character-ledger-workshop-v2';
 const INVENTORY_KEY='character-ledger-inventory-v1';
 const INVENTORY_SAVED_KEY='character-ledger-inventory-saved-at-v1';
-let state,inventory={},inventorySavedAt='',craftingPlan={order:[],desired:{},currentGoalId:''},craftHistory=[],craftingOnlyMissing=false,craftingStatusFilter='',historyCounter=0,toastTimer,filter={q:'',species:'',status:'',sort:location.hash==='#progress'?'progress':'name',rank:''},scoreDraft={characterId:'',presetId:'',title:'',image:'',status:'pending',date:new Date().toISOString().slice(0,10),credit:'sky-limits',source:'',multiplier:1,custom:0,quantities:{}};
+const FALLBACK_IMAGE="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400'%3E%3Crect width='600' height='400' fill='%230b1422'/%3E%3Cpath d='M300 115l25 60 60 25-60 25-25 60-25-60-60-25 60-25z' fill='%23566b84'/%3E%3Ctext x='300' y='330' text-anchor='middle' fill='%239badc2' font-family='sans-serif' font-size='22'%3EImage unavailable%3C/text%3E%3C/svg%3E";
+let state,inventory={},inventorySavedAt='',craftingPlan={order:[],desired:{},currentGoalId:''},craftHistory=[],craftingOnlyMissing=false,craftingStatusFilter='',historyCounter=0,toastTimer,brokenImages=new Map(),filter={q:'',species:'',status:'',sort:location.hash==='#progress'?'progress':'name',rank:''},scoreDraft={characterId:'',presetId:'',title:'',image:'',status:'pending',date:new Date().toISOString().slice(0,10),credit:'sky-limits',source:'',multiplier:1,custom:0,quantities:{}};
 const main=$('#main');
 function toast(text){$('#toast').textContent=text;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4500);}
 function character(id){return state.characters.find(c=>c.id===id);}
 function species(id){return state.systems.find(s=>s.id===id);}
 function cover(c){return state.art.find(a=>a.id===c.coverId)||state.art.find(a=>a.characterId===c.id&&a.image);}
-function imageHTML(a,cls='',alt=''){return a?.image?`<img class="${cls}" src="${E(a.image)}" alt="${E(alt||a.title)}" loading="lazy">`:`<span class="no-image" aria-hidden="true">◇</span>`;}
+function imageHTML(a,cls='',alt=''){return a?.image?`<img class="${cls}" src="${E(a.image)}" alt="${E(alt||a.title)}" loading="lazy" decoding="async" data-ledger-image-id="${E(a.id)}">`:`<span class="no-image" aria-hidden="true">◇</span>`;}
 function blank(title,text,action=''){return `<div class="empty"><h2>${E(title)}</h2><p>${E(text)}</p>${action}</div>`;}
 function meter(p){return `<div class="meter" role="progressbar" aria-label="Progress to ${E(p.next?.name||'highest rank')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p.percentage)}"><span style="width:${p.percentage}%"></span></div>`;}
 function rankLabel(p){return p.current?.name||p.system?.baseName||'No rank configured';}
@@ -228,19 +229,20 @@ function updateScorePreview() {
 }
 function renderJournal() {
   ensureScoreDraft();
-  const pending=C.pendingReview(state),warnings=C.pointWarnings(state),reached=state.characters.reduce((sum,c)=>sum+C.rankMilestones(state,c).filter(row=>row.reached).length,0),c=character(scoreDraft.characterId),presets=scorePresetsFor(c),preset=activeScorePreset();
+  const pending=C.pendingReview(state),summary=C.dataSummary(state),warnings=[...C.pointWarnings(state),...[...brokenImages].map(([artId,source])=>({type:'broken-image',characterId:state.art.find(art=>art.id===artId)?.characterId||'',message:'Image failed to load for '+artId+': '+source}))],reached=state.characters.reduce((sum,c)=>sum+C.rankMilestones(state,c).filter(row=>row.reached).length,0),c=character(scoreDraft.characterId),presets=scorePresetsFor(c),preset=activeScorePreset();
   const pendingRows=pending.map(row=>`<article class="review-row"><div><span class="badge pending">Pending</span><h3><a href="#character/${row.character.id}/art/${row.art.id}">${E(row.art.title)}</a></h3><small><a href="#character/${row.character.id}">${E(row.character.name)}</a>${row.art.date?' · '+E(row.art.date):' · No date recorded'}</small></div><strong>+${fmt(row.art.xp)} ${E(row.system?.xpName||'XP')}</strong></article>`).join('');
-  const warningRows=warnings.map(warning=>`<li><a href="#character/${warning.characterId}">${E(warning.message)}</a></li>`).join('');
+  const warningRows=warnings.map(warning=>`<li>${warning.characterId?`<a href="#character/${warning.characterId}">${E(warning.message)}</a>`:E(warning.message)}</li>`).join('');
   const rules=preset.rules.map(rule=>`<div class="score-rule"><div><strong>${E(rule.name)}</strong><small>${fmt(rule.points)} points each</small></div><label>Quantity<input type="number" min="0" max="100" step="1" value="${scoreDraft.quantities[rule.id]||0}" data-score-rule="${rule.id}"></label></div>`).join('');
   main.innerHTML=head('The Field Journal','Track every point, plan the next milestone, and prepare new artwork records.','','POINTS & PROGRESS')+`
+    <div class="notice cumulative-notice"><strong>Cumulative progress:</strong> rewards and crafting never subtract ${state.systems.map(system=>E(system.xpName)).join(' or ')}. Spendable currency should be tracked as inventory instead.</div>
     <div class="journal-stats"><div><strong>${state.characters.length}</strong><span>character goals</span></div><div><strong>${pending.length}</strong><span>pending review</span></div><div><strong>${reached}</strong><span>ranks reached</span></div><div><strong>${warnings.length}</strong><span>data notes</span></div></div>
     <div class="section-head"><div><h2>Next goals</h2><small>Defaults to the next rank; optional overrides live on each character in data.js.</small></div></div>
     <div class="journal-goals">${state.characters.map(goalCard).join('')||blank('No characters yet','Add a character to start a goal.')}</div>
     <div class="journal-columns">
       <section class="panel"><div class="section-head"><div><h2>Pending review</h2><small>These points are visible but not included in totals.</small></div><span class="badge pending">${pending.length}</span></div><div class="review-list">${pendingRows||'<div class="all-clear"><span aria-hidden="true">✓</span><strong>Review queue clear</strong><small>No artwork is waiting on approval.</small></div>'}</div></section>
-      <section class="panel"><div class="section-head"><div><h2>Point health</h2><small>Helpful checks; nothing here changes your totals.</small></div><span class="badge ${warnings.length?'pending':'good'}">${warnings.length}</span></div>${warnings.length?`<ul class="health-list">${warningRows}</ul>`:'<div class="all-clear"><span aria-hidden="true">✓</span><strong>Everything looks tidy</strong><small>No point-tracking warnings found.</small></div>'}</section>
+      <section class="panel"><div class="section-head"><div><h2>Data health</h2><small>Helpful checks; nothing here changes your totals.</small></div><span class="badge ${warnings.length?'pending':'good'}">${warnings.length}</span></div><p class="health-pass"><strong>✓ Schema v1 validated</strong><small>${summary.characters} characters · ${summary.art} artworks · ${summary.localImages} local and ${summary.externalImages} external images · ${summary.links} ${summary.links===1?'link':'links'}</small></p>${warnings.length?`<ul class="health-list">${warningRows}</ul>`:'<div class="all-clear compact-clear"><span aria-hidden="true">✓</span><strong>Everything looks tidy</strong><small>No point-tracking or loaded-image warnings found.</small></div>'}</section>
     </div>
-    <section class="panel score-panel" aria-labelledby="score-heading"><div class="section-head"><div><h2 id="score-heading">Artwork scoring calculator</h2><small>Calculate a total, then copy a complete record into the art array in data.js.</small></div><div class="score-total"><strong id="score-total">0</strong><span id="score-unit">XP</span></div></div>
+    <section class="panel score-panel" aria-labelledby="score-heading"><div class="section-head"><div><h2 id="score-heading">Artwork scoring calculator</h2><small id="score-help">Calculate a total, then copy a complete record into the art array in data.js.</small></div><div class="score-total" aria-live="polite" aria-atomic="true"><strong id="score-total">0</strong><span id="score-unit">XP</span></div></div>
       <div class="score-form-grid">
         <label>Character<select data-score-field="characterId">${state.characters.map(item=>`<option value="${item.id}"${selected(scoreDraft.characterId,item.id)}>${E(item.name)}</option>`).join('')}</select></label>
         <label>Scoring preset<select data-score-field="presetId">${presets.map(item=>`<option value="${item.id}"${selected(scoreDraft.presetId,item.id)}>${E(item.name)}</option>`).join('')}<option value="manual"${selected(scoreDraft.presetId,'manual')}>Manual points only</option></select></label>
@@ -253,7 +255,7 @@ function renderJournal() {
       </div>
       <div class="score-rules">${rules||'<p class="muted">Use manual points below for this character.</p>'}</div>
       <div class="score-extras"><label>Manual points<input type="number" min="0" max="1000000000" step="0.01" value="${scoreDraft.custom}" data-score-field="custom"></label><label>Multiplier<input type="number" min="1" max="100" step="0.01" value="${scoreDraft.multiplier}" data-score-field="multiplier"></label></div>
-      <p id="score-error" class="form-error" role="alert"></p><label>Ready-to-paste artwork record<textarea id="score-output" rows="16" readonly spellcheck="false"></textarea></label><div class="modal-actions"><button class="primary" data-action="copy-score-record">Copy artwork record</button></div>
+      <p id="score-error" class="form-error" role="alert"></p><label>Ready-to-paste artwork record<textarea id="score-output" rows="16" readonly spellcheck="false" aria-describedby="score-help"></textarea></label><div class="modal-actions"><button type="button" class="primary" data-action="copy-score-record">Copy artwork record</button></div>
       <p class="inline-help">This helper does not edit the live site. Review the record, paste it inside <code>art: [ ]</code>, and commit data.js as usual.</p>
     </section>`;
   updateScorePreview();
@@ -290,8 +292,8 @@ function renderCharacter(id) {
 }
 function renderSpecies() {
   main.innerHTML=head('Species & ranks','Each species has its own point system and milestones.','','THE RULEBOOK')+
-  '<div class="notice">Thresholds are cumulative — “Below Guardian” is just a placeholder label, not an official Aedraco rank.</div>'+
-  (state.systems.map(s=>`<article class="panel species-card"><div class="section-head"><div><h2>${E(s.name)}</h2><small>${E(s.xpName)} · ${E(s.levelName)} · ${state.characters.filter(c=>c.systemId===s.id).length} characters</small></div></div><table class="rank-table"><thead><tr><th>${E(s.levelName)}</th><th>Total ${E(s.xpName)}</th><th>Unlock reward</th></tr></thead><tbody><tr><td>${E(s.baseName||'Unranked')}</td><td>Starting label</td><td>—</td></tr>${s.ranks.map(r=>`<tr><td>${E(r.name)}</td><td>${fmt(r.threshold)}</td><td>${E(r.reward||'Not set')}</td></tr>`).join('')}</tbody></table></article>`).join('')||blank('No species set up','No leveling rules yet.'));
+  '<div class="notice">All rank thresholds use cumulative lifetime points. Rewards never spend them. “Below Guardian” is a placeholder label, not an official Aedraco rank.</div>'+
+  (state.systems.map(s=>`<article class="panel species-card"><div class="section-head"><div><h2>${E(s.name)}</h2><small>${E(s.xpName)} · ${E(s.levelName)} · ${state.characters.filter(c=>c.systemId===s.id).length} characters</small></div><span class="badge good">Cumulative</span></div><table class="rank-table"><thead><tr><th>${E(s.levelName)}</th><th>Total ${E(s.xpName)}</th><th>Unlock reward</th></tr></thead><tbody><tr><td>${E(s.baseName||'Unranked')}</td><td>Starting label</td><td>—</td></tr>${s.ranks.map(r=>`<tr><td>${E(r.name)}</td><td>${fmt(r.threshold)}</td><td>${E(r.reward||'Not set')}</td></tr>`).join('')}</tbody></table></article>`).join('')||blank('No species set up','No leveling rules yet.'));
 }
 function render() {
   if(!state)return;
@@ -330,7 +332,9 @@ async function copyScoreRecord() {
 }
 document.addEventListener('click',event=>{
   const button=event.target.closest('[data-action]');if(!button)return;
-  if(button.dataset.action==='clear-filters'){
+  if(button.dataset.action==='reload-ledger'){
+    location.reload();
+  } else if(button.dataset.action==='clear-filters'){
     filter={q:'',species:'',status:'',sort:location.hash==='#progress'?'progress':'name',rank:''};render();
   } else if(button.dataset.action==='view-art'){
     const a=state.art.find(a=>a.id===button.dataset.id);
@@ -377,6 +381,10 @@ document.addEventListener('change',event=>{
   else if(planQuantity)setDesiredQuantity(planQuantity.dataset.planQuantity,planQuantity.value);
   else if(statusFilter){craftingStatusFilter=statusFilter.value;renderCrafting();}
 });
+document.addEventListener('error',event=>{
+  const image=event.target;if(image?.tagName!=='IMG'||!image.dataset.ledgerImageId||image.dataset.fallback==='true')return;
+  const failedSource=image.currentSrc||image.src;brokenImages.set(image.dataset.ledgerImageId,failedSource);image.dataset.fallback='true';image.classList.add('image-failed');image.src=FALLBACK_IMAGE;
+},true);
 $('#inventory-import-form').addEventListener('submit',async event=>{
   event.preventDefault();
   const error=$('#inventory-import-error'),file=$('#inventory-import-file').files?.[0];error.textContent='';
@@ -419,7 +427,7 @@ try {
   loadWorkshop(state.inventory);
   render();
 } catch(error) {
-  main.innerHTML=blank('Could not load the ledger','Something’s wrong with the data: '+error.message);
+  main.innerHTML=`<div class="fatal-error"><p class="eyebrow">DATA CHECK STOPPED THE LOAD</p><h1>Could not load the ledger</h1><p>${E(error.message)}</p><p class="muted">The validator names the record that needs attention. Fix that field in data.js, then reload the page; no browser data was changed.</p><div class="actions"><a class="button primary" href="OWNER-GUIDE.md">Open the owner guide</a><button type="button" data-action="reload-ledger">Try again</button></div></div>`;
   console.error(error);
 }
 

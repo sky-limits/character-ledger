@@ -11,6 +11,8 @@ const sandbox = {window:{}};
 vm.runInNewContext(fs.readFileSync(path.join(root,'data.js'),'utf8'),sandbox);
 
 const state = Core.validate(sandbox.window.CHARACTER_LEDGER_SEED);
+assert.ok(state.systems.every(system=>system.pointMode==='cumulative'),'Every stable point system should declare cumulative semantics.');
+assert.deepEqual(Core.dataSummary(state),{characters:7,art:19,localImages:13,externalImages:6,withoutImages:0,links:1,dated:11,undated:8,systems:2,recipes:1,scoringPresets:1});
 const spear = state.crafting.find(recipe=>recipe.id==='spear');
 assert.ok(spear,'Spear recipe should load.');
 assert.deepEqual(Core.craftingProgress(spear,state.inventory),{
@@ -107,6 +109,9 @@ assert.throws(()=>Core.scoreArtwork(aedracoPreset,{fullbody:101},1,0),/whole num
 
 const invalidGoal=JSON.parse(JSON.stringify(sandbox.window.CHARACTER_LEDGER_SEED));
 invalidGoal.characters[0].goalRankId='missing-rank';
-assert.throws(()=>Core.validate(invalidGoal),/goal references a missing rank/);
+assert.throws(()=>Core.validate(invalidGoal),/Character "nerissa".*goal references a missing rank/);
+const invalidPointMode=JSON.parse(JSON.stringify(sandbox.window.CHARACTER_LEDGER_SEED));
+invalidPointMode.systems[0].pointMode='spendable';
+assert.throws(()=>Core.validate(invalidPointMode),/Species "aedraco".*pointMode must be "cumulative"/);
 
 console.log('Character Ledger core tests passed.');

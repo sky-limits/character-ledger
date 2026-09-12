@@ -1,11 +1,11 @@
 # Character Ledger
 
-Finch's character, artwork, progression, reward, and crafting tracker. The
-v0.09 Field Journal adds point breakdowns and timelines, rank goals, milestone
-forecasts, a pending-review queue, data-health checks, and an artwork scoring
-calculator. Published records remain read-only; the browser-local Forge still
-supports shared inventory, priority planning, craft consumption, undoable
-history, and portable workshop backups.
+Finch's stable character, artwork, progression, reward, and crafting tracker.
+The Field Journal provides point breakdowns and timelines, rank goals, milestone
+forecasts, pending review, data-health checks, and an artwork scoring calculator.
+Published records remain read-only; the browser-local Forge supports shared
+inventory, priority planning, craft consumption, undoable history, and portable
+workshop backups.
 The site is plain HTML, CSS, and JavaScript with no build step or database.
 
 ## Deploy on Vercel
@@ -33,7 +33,12 @@ node --check app.js
 node tests/core.test.js
 node tests/app.test.js
 node tests/journal.test.js
+node tests/release.test.js
 ```
 
 When changing `data.js`, `core.js`, `app.js`, or `style.css`, also increment
 the matching `?v=` values in `index.html` so visitors receive the new files.
+
+See [OWNER-GUIDE.md](OWNER-GUIDE.md) for the stable schema and publishing flow,
+and [CHANGELOG.md](CHANGELOG.md) for release history. GitHub Actions runs the
+same checks automatically on pushes and pull requests.
