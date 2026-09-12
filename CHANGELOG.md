@@ -1,5 +1,26 @@
 # Character Ledger changelog
 
+## v1.01 — Collection polish
+
+- Added distinct system accents across character, progress, journal, art, and
+  species cards so Aedraco, Kuda Pariso, and future systems scan differently.
+- Added optional artwork `focalPoint` support so cover crops can keep faces and
+  important pose details in frame.
+- Reworked rank meters into lifetime rank tracks with threshold ticks for every
+  configured milestone.
+- Replaced placeholder Unicode sidebar glyphs with lightweight inline SVG icons
+  and strengthened card hover/focus feedback.
+- Added a global ledger search across characters, artwork titles and notes,
+  rewards, species/ranks, and Forge recipes.
+- Added multi-select species, progress/redemption, and current-rank filters plus
+  total-points ascending and descending sorts.
+- Added previous/next buttons and left/right arrow-key navigation to the artwork
+  lightbox.
+- Added visual Forge item tokens, with optional per-requirement `icon` artwork
+  when a custom item image is available.
+- Kept the v1.00 renderer and schema logic intact beneath a progressive
+  enhancement layer, with new helper tests and CI coverage.
+
 ## v1.00 — Stable release
 
 - Declared GP and KudaPoints as cumulative lifetime progress; rewards and
