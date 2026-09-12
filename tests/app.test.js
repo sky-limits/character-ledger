@@ -20,7 +20,7 @@ const makeElement = () => {
 };
 for (const selector of ['#main','#toast','#reward-count','#lightbox img','#lightbox p','#lightbox','#lightbox .lightbox-close','#inventory-import-form','#inventory-import-error','#inventory-import-file','#inventory-import-dialog']) elements.set(selector,makeElement());
 
-const storage = new Map([['character-ledger-inventory-v1',JSON.stringify({Thread:5})]]);
+const storage = new Map([['character-ledger-inventory-v1',JSON.stringify({Stick:1,Thread:5,Arrowhead:0})]]);
 const sandbox = {
   console,
   Intl,
