@@ -1,4 +1,4 @@
-/* OWNER-EDITED SITE DATA — v0.07
+/* OWNER-EDITED SITE DATA — v0.07.2
    Edit this file in GitHub or a text editor, then commit it to the repository.
    This is the only source of character records. Visitors cannot submit edits.
    See README.txt for copy/paste examples for characters, artwork, and rewards.
@@ -251,7 +251,7 @@ window.CHARACTER_LEDGER_SEED = {
     Stick: 1,
     Thread: 1,
     Arrowhead: 0,
-    Bilberries: 1 
+    Bilberries: 1
   },
 
   crafting: [

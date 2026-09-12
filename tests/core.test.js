@@ -41,4 +41,14 @@ const migrated = Core.validate(legacy);
 assert.equal(migrated.inventory.Stick,3,'Legacy recipe amounts should migrate when shared inventory is absent.');
 assert.equal(Core.craftingProgress(migrated.crafting[0],migrated.inventory).have,6);
 
+assert.deepEqual(Core.validateInventoryExport({
+  format:'character-ledger-inventory',version:1,inventory:{Stick:12,Thread:2.5}
+}),{Stick:12,Thread:2.5});
+assert.throws(()=>Core.validateInventoryExport({
+  format:'character-ledger-inventory',version:1,inventory:{Stick:'many'}
+}),/Invalid amount/,'Corrupted inventory amounts should be rejected.');
+assert.throws(()=>Core.validateInventoryExport({
+  format:'character-ledger-inventory',version:1,inventory:{constructor:1}
+}),/reserved/,'Reserved object keys should be rejected.');
+
 console.log('Character Ledger core tests passed.');

@@ -1,8 +1,11 @@
 (function(root) {
   'use strict';
   const MAX_XP = 1000000000;
+  const RESERVED_INVENTORY_KEYS = new Set(['__proto__','constructor','prototype']);
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
   const copy = data => JSON.parse(JSON.stringify(data));
+  const safeInventoryKey = value => typeof value==='string' && value.length<=200 && value.trim() && !RESERVED_INVENTORY_KEYS.has(value);
+  const safeInventoryAmount = value => Number.isFinite(value)&&value>=0&&value<=MAX_XP&&Math.abs(value*100-Math.round(value*100))<0.0001;
   function totalXP(state, character) {
     return Math.round((character.openingXP + state.art.filter(a => a.characterId === character.id && a.status === 'approved').reduce((sum,a) => sum + a.xp, 0) + state.adjustments.filter(a => a.characterId === character.id).reduce((sum,a) => sum + a.amount, 0))*100)/100;
   }
@@ -49,6 +52,20 @@
       const have=inventoryAmount(inventory,item);
       return {item,required,have,missing:Math.max(0,required-have)};
     }).filter(row=>row.missing>0).sort((a,b)=>a.item.localeCompare(b.item));
+  }
+  function validateInventoryExport(input) {
+    assert(input&&typeof input==='object'&&!Array.isArray(input),'The import must contain a JSON object.');
+    assert(input.format==='character-ledger-inventory'&&input.version===1,'This is not a supported Character Ledger inventory export.');
+    assert(input.inventory&&typeof input.inventory==='object'&&!Array.isArray(input.inventory),'The import does not contain a valid inventory object.');
+    const entries=Object.entries(input.inventory);
+    assert(entries.length<=5000,'The inventory contains too many items.');
+    const inventory={};
+    for(const [item,amount] of entries){
+      assert(safeInventoryKey(item),'Invalid or reserved inventory item name.');
+      assert(safeInventoryAmount(amount),'Invalid amount for "'+item+'". Use a number from 0 to 1,000,000,000 with up to two decimal places.');
+      inventory[item]=amount;
+    }
+    return inventory;
   }
   function safeURL(value, image=false) {
     if (!value) return true;
@@ -103,7 +120,7 @@
         const requirements=[],itemNames=new Set();
         for(const item of recipe.requirements){
           assert(item&&typeof item==='object','Invalid crafting requirement.');
-          str(item.item,'item name',200);assert(item.item.trim(),'A crafting item needs a name.');
+          str(item.item,'item name',200);assert(item.item.trim(),'A crafting item needs a name.');assert(safeInventoryKey(item.item),'Reserved crafting item name.');
           assert(!itemNames.has(item.item),'A recipe cannot list the same item twice.');itemNames.add(item.item);
           num(item.required,'required amount');assert(item.required>0,'Required amount must be greater than zero.');
           if(item.have!==undefined){num(item.have,'owned amount');legacyInventory[item.item]=Math.max(legacyInventory[item.item]||0,item.have);}
@@ -122,7 +139,7 @@
       const entries=Object.entries(d.inventory);
       if(entries.length>5000)craftingWarnings.push('Only the first 5,000 inventory items were loaded.');
       for(const [item,amount] of entries.slice(0,5000)){
-        try {str(item,'inventory item',200);assert(item.trim(),'An inventory item needs a name.');num(amount,'inventory amount');inventory[item]=amount;}
+        try {str(item,'inventory item',200);assert(item.trim(),'An inventory item needs a name.');assert(safeInventoryKey(item),'Reserved inventory item name.');num(amount,'inventory amount');inventory[item]=amount;}
         catch(error){craftingWarnings.push('Inventory item "'+item+'" was skipped: '+error.message);}
       }
     }
@@ -133,6 +150,6 @@
     for(const [key,value] of Object.entries(d.redemptions)){assert(validKeys.has(key),'Redemption references a missing reward.');assert(value&&typeof value==='object','Invalid redemption.');str(value.date,'redemption date',40);assert(Number.isFinite(Date.parse(value.date)),'Invalid redemption date.');str(value.note,'redemption note',2000);}
     return {format:d.format,version:d.version,systems:d.systems,characters:d.characters,art:d.art,adjustments:d.adjustments,rewards:d.rewards,redemptions:d.redemptions,inventory,crafting,craftingWarnings};
   }
-  root.LedgerCore={totalXP,progress,rewardRows,inventoryAmount,craftingProgress,shoppingList,validate,safeURL,copy};
+  root.LedgerCore={totalXP,progress,rewardRows,inventoryAmount,craftingProgress,shoppingList,validateInventoryExport,validate,safeURL,copy};
   if(typeof module!=='undefined')module.exports=root.LedgerCore;
 })(typeof window!=='undefined'?window:globalThis);

@@ -2,7 +2,8 @@
 
 Finch's character, artwork, progression, reward, and crafting tracker. Published
 records remain read-only; crafting inventory can be adjusted and saved locally
-in each browser.
+in each browser. Inventory exports can be safely merged or restored, and open
+tabs stay in sync.
 The site is plain HTML, CSS, and JavaScript with no build step or database.
 
 ## Deploy on Vercel

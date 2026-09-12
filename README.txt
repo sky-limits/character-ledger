@@ -1,4 +1,25 @@
-CHARACTER LEDGER v0.07 — WORKSHOP UPDATE
+CHARACTER LEDGER v0.07.2 — WORKSHOP POLISH
+
+WHAT CHANGED
+- Exported inventory JSON files can now be imported with Merge or Replace.
+- Imports are validated before anything is saved; malformed, oversized, and
+  unsupported files show an error inside the import window.
+- Each material shows which recipes need it and how many are still missing.
+- “Only show missing” hides stocked and currently unused inventory items.
+- Inventory changes sync across other open tabs for this site.
+- The inventory header shows when the browser copy was last saved.
+- Plus/minus controls keep keyboard focus after progress recalculates.
+- Suspiciously large quantities require confirmation, and invalid number input
+  is rejected with a readable message.
+
+IMPORTING INVENTORY
+On the Crafting page, choose Import inventory and select a JSON file previously
+created with Export inventory. Merge updates only the items in the file.
+Replace discards the browser copy first, then adds the imported items; anything
+required by a recipe but absent from the file begins at 0. Neither option edits
+data.js or changes the inventory on another device.
+
+CHARACTER LEDGER v0.07 — PREVIOUS UPDATE NOTES
 
 WHAT CHANGED
 - Crafting now uses one shared inventory instead of a separate have amount in
