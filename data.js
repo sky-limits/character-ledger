@@ -66,7 +66,7 @@ window.CHARACTER_LEDGER_SEED = {
     systemId: 'kuda-pariso',
     openingXP: 0,
     coverId: '',
-    tags: ['Swan'],
+    tags: ['Astrapia'],
     notes: ''
   },
   {
