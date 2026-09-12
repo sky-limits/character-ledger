@@ -266,7 +266,10 @@ window.CHARACTER_LEDGER_SEED = {
     Stick: 1,
     Thread: 1,
     Arrowhead: 0,
-    Bilberries: 1
+    Bilberries: 1,
+    Pumpkin: 7,
+    Map Pieces: 6,
+    Leather: 2
   },
 
   crafting: [
