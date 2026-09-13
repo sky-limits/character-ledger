@@ -236,7 +236,7 @@ window.CHARACTER_LEDGER_SEED = {
     id: 'pumpkin-picking', characterId: 'nerissa',
     title: 'pumpkin picking', image: 'https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/c9d1bc0a-c506-4656-8621-9a9e6ca1371a/dmta50p-f853797e-66ce-4c42-9dde-03ce8d848ae5.png/v1/fill/w_1181,h_676,q_70,strp/_ad_pumpkin_picking_by_sky_limits_dmta50p-pre.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9NzMzIiwicGF0aCI6Ii9mL2M5ZDFiYzBhLWM1MDYtNDY1Ni04NjIxLTlhOWU2Y2ExMzcxYS9kbXRhNTBwLWY4NTM3OTdlLTY2Y2UtNGM0Mi05ZGRlLTAzY2U4ZDg0OGFlNS5wbmciLCJ3aWR0aCI6Ijw9MTI4MCJ9XV0sImF1ZCI6WyJ1cm46c2VydmljZTppbWFnZS5vcGVyYXRpb25zIl19.hn_HTspevjXa9VJSSZvtOwIWHfJxEQOJSADJmwIzbjc',
     xp: 7, status: 'approved', rolled: false,
-    itemRewards: '', rewardsRedeemed: false, redemptionLink: '',
+    itemRewards: 'x1 Pumpkin x1 Arrowhead x20 Leaves x10 Sticks', rewardsRedeemed: false, redemptionLink: '',
     credit: 'sky-limits', source: '', date: '', notes: '3 (Fullbody Colored + Shaded) +2 (Background) +2 (Monthly Quest)'
   }
   ],
