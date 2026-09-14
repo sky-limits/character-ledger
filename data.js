@@ -238,6 +238,12 @@ window.CHARACTER_LEDGER_SEED = {
     xp: 7, status: 'approved', rolled: false,
     itemRewards: 'x1 Pumpkin x1 Arrowhead x20 Leaves x10 Sticks', rewardsRedeemed: false, redemptionLink: '',
     credit: 'sky-limits', source: '', date: '', notes: '3 (Fullbody Colored + Shaded) +2 (Background) +2 (Monthly Quest)'
+  },
+  {
+    id: '6-rolls', characterId: 'nerissa',
+    title: '6 explores', image: 'images/6-rolls.png', xp: 54, status: 'approved', rolled: true,
+    itemRewards: '2x Map Piece, 1x Needle, 1x Stick, 2x Small Shells, 4x Pumpkin, 1x Limestone, 1x Bilberries, 1x Arrowhead, 1x Leaves, 1x Scrap Metal', rewardsRedeemed: false, redemptionLink: '',
+    credit: 'sky-limits', source: '', date: '', notes: '+3 (Fullbody Colored + Shaded) +2 (Background) +2 (Activity) +2 (Personal-Art) x 6 = 54'
   }
   ],
   // Calculator rules are owner-editable. Presets may target one species or
@@ -263,14 +269,18 @@ window.CHARACTER_LEDGER_SEED = {
   // these numbers in this browser; edit these defaults to change them for
   // everyone on the next deployment.
   inventory: {
-    Stick: 11,
+    Stick: 13,
     Thread: 1,
-    Arrowhead: 1,
-    Bilberries: 1,
-    Pumpkin: 8,
-    Map: 6,
+    Arrowhead: 2,
+    Bilberries: 2,
+    Pumpkin: 11,
+    Map: 8,
+    Scrap: 1,
+    Limestone: 1,
+    Shells: 2,
+    Needle: 1,
     Leather: 2,
-   Leaves: 20
+   Leaves: 21
   },
 
   crafting: [
